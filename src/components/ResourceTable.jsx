@@ -33,6 +33,7 @@ export default function ResourceTable({
   onRowClick,
   fixedParams,
   headerExtras, // optional ReactNode rendered next to the "New X" button
+  defaultsFeature, // optional: enables the "Add Default Data" button (POST /defaults/:feature)
   pageSize = 10,
 }) {
   const api = resourceApi(resourceKey);
@@ -187,6 +188,28 @@ export default function ResourceTable({
     }
   };
 
+  // Seed this feature's default/example data — idempotent on the backend:
+  // existing records are skipped, never overwritten or duplicated.
+  const [seedingDefaults, setSeedingDefaults] = useState(false);
+  const addDefaults = async () => {
+    setSeedingDefaults(true);
+    try {
+      const result = await endpoints.defaults.seed(defaultsFeature);
+      const added = result?.added ?? 0;
+      const skipped = result?.skipped ?? 0;
+      toast(
+        added > 0
+          ? `Default data added: ${added} new, ${skipped} already existed`
+          : `Nothing to add — all ${skipped} default records already exist`,
+      );
+      await load();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setSeedingDefaults(false);
+    }
+  };
+
   const doDelete = async (row) => {
     setDeletingId(row.id);
     try {
@@ -214,6 +237,17 @@ export default function ResourceTable({
         actions={
           <>
             {headerExtras}
+            {defaultsFeature && canCreate ? (
+              <button
+                onClick={addDefaults}
+                disabled={seedingDefaults}
+                className="btn-ghost flex items-center gap-2"
+                title="Insert this feature's example data — records that already exist are skipped, never overwritten"
+              >
+                {seedingDefaults ? <Spinner className="w-4 h-4" /> : <Icon name="plus" className="w-4 h-4" />}
+                Add Default Data
+              </button>
+            ) : null}
             {canCreate ? (
               <button onClick={openCreate} className="btn-primary flex items-center gap-2">
                 <Icon name="plus" className="w-4 h-4" />

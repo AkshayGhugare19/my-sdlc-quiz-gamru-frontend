@@ -110,6 +110,16 @@ export const endpoints = {
   notifications: crud('notifications'),
   certificateTemplates: crud('certificate-templates'),
 
+  // ── Per-feature default data (idempotent: existing records are skipped) ──
+  defaults: {
+    seed: (feature) => http.post(`/defaults/${feature}`),
+  },
+
+  // ── Accessory unlock wiring (which mission drops it) ──
+  accessory: {
+    rewardMission: (id) => http.get(`/accessories/${id}/reward-mission`),
+  },
+
   // ── Course roadmap builder (a course SELECTS existing missions/bundles/tournaments) ──
   course: {
     missions: (id) => http.get(`/courses/${id}/missions`),

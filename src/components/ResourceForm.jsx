@@ -12,15 +12,18 @@ import { Spinner } from './ui.jsx';
 // A `multiReference` field additionally supports `selectedEndpoint(id)` to preselect
 //   the currently-attached rows when editing; it stores/submits an array of ids.
 function coerce(field, value) {
-  if (field.type === 'multiReference') return Array.isArray(value) ? value : [];
+  // A non-array multiReference value means "current selection still loading (or
+  // failed to load)" — OMIT the field so the backend leaves existing links
+  // untouched, instead of submitting [] and silently detaching everything.
+  if (field.type === 'multiReference') return Array.isArray(value) ? value : undefined;
   if (field.type === 'answerOptions') {
-    if (!Array.isArray(value)) return [];
+    if (!Array.isArray(value)) return undefined; // still loading — leave existing options untouched
     return value
       .filter((r) => String(r.label ?? '').trim() !== '')
       .map((r) => ({ ...(r.id ? { id: r.id } : {}), label: String(r.label).trim(), isCorrect: !!r.isCorrect }));
   }
   if (field.type === 'levelBands') {
-    if (!Array.isArray(value)) return [];
+    if (!Array.isArray(value)) return undefined; // still loading — leave existing levels untouched
     // Drop incomplete rows; numbers in, blank XP End = open-ended (null).
     return value
       .filter((r) => r.level !== '' && r.level != null && r.minXp !== '' && r.minXp != null)
@@ -66,8 +69,17 @@ function buildDefaults(fields, initial) {
   for (const f of fields) {
     // `valueFrom` lets a field read a nested value (e.g. row.gameConfig.questionCount).
     let v = f.valueFrom && initial ? f.valueFrom(initial) : initial?.[f.name];
-    if (f.type === 'multiReference' || f.type === 'levelBands' || f.type === 'answerOptions') {
-      d[f.name] = Array.isArray(v) ? v : [];
+    if (f.type === 'multiReference') {
+      // Editing: the current selection loads asynchronously — start as undefined
+      // ("not loaded yet") so a too-early save can't submit an empty selection
+      // and wipe the record's existing links. New records start genuinely empty.
+      d[f.name] = Array.isArray(v) ? v : initial?.id && f.selectedEndpoint ? undefined : [];
+      continue;
+    }
+    if (f.type === 'levelBands' || f.type === 'answerOptions') {
+      // Same protection as multiReference: while an existing record's rows are
+      // still loading, the value is undefined and the field is omitted on save.
+      d[f.name] = Array.isArray(v) ? v : initial?.id && f.selectedEndpoint ? undefined : [];
       continue;
     }
     if (f.type === 'json' && v && typeof v === 'object') v = JSON.stringify(v, null, 2);
@@ -185,6 +197,7 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [selectionFailed, setSelectionFailed] = useState(false);
 
   useEffect(() => {
     const lister = refLister(field.resource);
@@ -210,7 +223,10 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
     };
   }, [field.resource]);
 
-  // Preselect the currently-attached rows when editing an existing record.
+  // Preselect the currently-attached rows when editing an existing record. The
+  // form value stays `undefined` ("not loaded") until this resolves, and the
+  // checklist is disabled meanwhile — so saving early or a failed fetch can
+  // never submit an empty selection that would detach the record's links.
   useEffect(() => {
     if (!initialRow?.id || typeof field.selectedEndpoint !== 'function') return undefined;
     let alive = true;
@@ -220,7 +236,7 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
         const rows = Array.isArray(res) ? res : res?.items || [];
         if (alive) rhf.onChange(rows.map((r) => r.id));
       } catch {
-        /* leave selection empty on failure */
+        if (alive) setSelectionFailed(true); // value stays undefined → field omitted on save
       }
     })();
     return () => {
@@ -229,9 +245,13 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialRow?.id]);
 
+  // Selection still loading (or failed) for an existing record → read-only.
+  const selectionPending =
+    !!initialRow?.id && typeof field.selectedEndpoint === 'function' && !Array.isArray(rhf.value);
   const selected = Array.isArray(rhf.value) ? rhf.value : [];
   const isChecked = (id) => selected.some((s) => String(s) === String(id));
   const toggle = (id) => {
+    if (selectionPending) return;
     rhf.onChange(isChecked(id) ? selected.filter((s) => String(s) !== String(id)) : [...selected, id]);
   };
 
@@ -240,33 +260,46 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
   }
 
   return (
-    <div
-      className={`rounded-xl bg-black/20 border ${
-        error ? '!border-red-400/60' : 'border-white/10'
-      } max-h-52 overflow-y-auto divide-y divide-white/5`}
-    >
-      {loading ? (
-        <div className="p-4 grid place-items-center text-neon">
-          <Spinner className="w-5 h-5" />
-        </div>
-      ) : options.length === 0 ? (
-        <div className="px-3 py-3 text-sm text-white/40">No options available.</div>
-      ) : (
-        options.map((o) => (
-          <label
-            key={o.id}
-            className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-white/5 transition"
-          >
-            <input
-              type="checkbox"
-              checked={isChecked(o.id)}
-              onChange={() => toggle(o.id)}
-              className="w-4 h-4 accent-neon shrink-0"
-            />
-            <span className="text-sm text-white/80 truncate">{optionLabelFor(o, field.optionLabel)}</span>
-          </label>
-        ))
-      )}
+    <div>
+      <div
+        className={`rounded-xl bg-black/20 border ${
+          error ? '!border-red-400/60' : 'border-white/10'
+        } max-h-52 overflow-y-auto divide-y divide-white/5 ${selectionPending ? 'opacity-60' : ''}`}
+      >
+        {loading ? (
+          <div className="p-4 grid place-items-center text-neon">
+            <Spinner className="w-5 h-5" />
+          </div>
+        ) : options.length === 0 ? (
+          <div className="px-3 py-3 text-sm text-white/40">No options available.</div>
+        ) : (
+          options.map((o) => (
+            <label
+              key={o.id}
+              className={`flex items-center gap-3 px-3 py-2 transition ${
+                selectionPending ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={isChecked(o.id)}
+                onChange={() => toggle(o.id)}
+                disabled={selectionPending}
+                className="w-4 h-4 accent-neon shrink-0"
+              />
+              <span className="text-sm text-white/80 truncate">{optionLabelFor(o, field.optionLabel)}</span>
+            </label>
+          ))
+        )}
+      </div>
+      {selectionPending &&
+        (selectionFailed ? (
+          <div className="text-xs text-amber-300 mt-1">
+            Couldn&apos;t load the current selection — saving now will leave this field unchanged.
+          </div>
+        ) : (
+          <div className="text-xs text-white/40 mt-1">Loading current selection…</div>
+        ))}
     </div>
   );
 }

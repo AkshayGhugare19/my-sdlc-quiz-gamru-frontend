@@ -206,9 +206,11 @@ export const RESOURCE_CONFIGS = {
         type: 'multiReference',
         resource: 'missions',
         optionLabel: 'title',
-        help: 'Pick the missions this pillar contains (create them on the Missions page first). The bundle has no questions of its own — each mission supplies its own, so make sure every mission here has questions attached.',
+        help: 'Pick the missions this pillar contains (create them on the Missions page first). The bundle has no questions of its own — each mission supplies its own, so make sure every mission here has questions attached. Unticking a mission only detaches it from the bundle; the mission itself is never deleted.',
         selectedEndpoint: (id) => endpoints.missionBundle.missions(id),
       },
+      { name: 'badgeId', label: 'Champion Badge', type: 'reference', resource: 'badges', optionLabel: 'name', help: 'Optional — awarded (once) when a player completes every mission in this bundle.' },
+      { name: 'certificateTemplateId', label: 'Completion Certificate', type: 'reference', resource: 'certificate-templates', optionLabel: 'name', help: 'Optional — the certificate issued (once) on first bundle completion.' },
       descField,
       publishedField,
     ],
@@ -243,6 +245,7 @@ export const RESOURCE_CONFIGS = {
       { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3, help: 'Most stars a player can earn here (one per correct answer).' },
       { name: 'laneCount', label: 'Lane Count', type: 'number', min: 1, default: 3, help: 'Answer lanes shown per question (2–4). Give each question at least this many options.' },
       { name: 'xpReward', label: 'XP Reward', type: 'number', min: 0, default: 100, help: 'XP granted for passing the mission.' },
+      { name: 'badgeId', label: 'Completion Badge', type: 'reference', resource: 'badges', optionLabel: 'name', help: 'Optional — this badge is awarded (once) when a player passes the mission.' },
       // THE fix for "no questions yet": pick a Question Category and every
       // question in it is attached to this mission on save — the same
       // MissionQuestion links the seed data creates for each pillar. (You can
@@ -278,6 +281,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'help',
     singular: 'Question',
     subtitle: 'Reusable questions attached to missions',
+    defaultsFeature: 'questions',
     filters: [{ name: 'type', label: 'Type', options: QUESTION_TYPES }],
     columns: [
       { key: 'prompt', label: 'Prompt', className: 'text-white font-medium max-w-md truncate' },
@@ -307,15 +311,44 @@ export const RESOURCE_CONFIGS = {
     icon: 'badge',
     singular: 'Badge',
     subtitle: 'Awards earned for achievements',
+    defaultsFeature: 'badges',
     columns: [
       nameCol,
       { key: 'code', label: 'Code', className: 'text-white/50 font-mono text-xs' },
+      { key: 'criteria', label: 'Auto-grant', render: (v, r) => (r.isAutoGranted && v?.type && v.type !== 'CUSTOM' ? <span className="chip bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">{v.type}</span> : <span className="text-white/35">manual</span>) },
       { key: 'description', label: 'Description', className: 'text-white/50' },
     ],
     fields: [
       { name: 'name', label: 'Name', type: 'text', required: true },
       { name: 'code', label: 'Code', type: 'text', help: 'auto from name' },
       { name: 'iconUrl', label: 'Icon URL', type: 'text' },
+      // Without a criteria type the badge is NEVER awarded automatically — this
+      // is exactly what makes seeded badges work while hand-made ones stay silent.
+      {
+        name: 'criteriaType',
+        label: 'How is it earned?',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'FIRST_MISSION', label: 'First mission passed' },
+          { value: 'PERFECT_SCORE', label: 'Perfect score (100%)' },
+          { value: 'FAST_LEARNER', label: 'Fast learner (finish with time left)' },
+          { value: 'GOLD_CHAMPION', label: 'Gold rating (score ≥ 90%)' },
+          { value: 'CUSTOM', label: 'Manual — via mission / bundle / reward rule' },
+        ],
+        valueFrom: (r) => r.criteria?.type ?? '',
+        help: 'REQUIRED for the badge to be awarded. Automatic criteria are checked after every race. Choose "Manual" to award it via a Mission\'s Completion Badge, a Bundle\'s Champion Badge, or a Reward Rule instead.',
+      },
+      {
+        name: 'minTimeRemaining',
+        label: 'Fast Learner: seconds left',
+        type: 'number',
+        min: 0,
+        default: 60,
+        valueFrom: (r) => r.criteria?.minTimeRemaining ?? 60,
+        help: 'Only used by the "Fast learner" criteria — pass with at least this many seconds on the clock.',
+      },
+      { name: 'isAutoGranted', label: 'Auto-grant enabled', type: 'checkbox', default: true, help: 'Award this badge automatically when its criteria are met (untick to pause it)' },
       descField,
     ],
   },
@@ -326,6 +359,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'crown',
     singular: 'Rank',
     subtitle: 'Prestige tiers players climb through',
+    defaultsFeature: 'ranks',
     columns: [
       nameCol,
       { key: 'tier', label: 'Tier', className: 'text-neon' },
@@ -353,6 +387,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'hat',
     singular: 'Accessory',
     subtitle: 'Cosmetic items players equip on their avatar',
+    defaultsFeature: 'accessories',
     columns: [
       nameCol,
       { key: 'slot', label: 'Slot', className: 'text-white/60' },
@@ -362,11 +397,45 @@ export const RESOURCE_CONFIGS = {
       { name: 'name', label: 'Name', type: 'text', required: true },
       { name: 'key', label: 'Key', type: 'text', help: 'auto' },
       { name: 'slot', label: 'Slot', type: 'select', options: ACCESSORY_SLOT },
-      { name: 'unlockType', label: 'Unlock Type', type: 'select', options: UNLOCK_TYPE, default: 'REWARD' },
+      {
+        name: 'unlockType',
+        label: 'Unlock Type',
+        type: 'select',
+        options: UNLOCK_TYPE,
+        default: 'REWARD',
+        help: 'REWARD = dropped by racing the mission picked below · SHOP = bought in the Reward Shop (a listing is created/updated automatically from the price below) · DEFAULT = every player starts with it.',
+      },
+      // REWARD wiring — without this link a REWARD accessory can never unlock.
+      {
+        name: 'rewardMissionId',
+        label: 'Reward Mission',
+        type: 'remoteSelect',
+        placeholder: 'No mission drops this yet…',
+        optionsEndpoint: () => endpoints.missions.list({ pageSize: 200 }),
+        optionValue: (o) => o.id,
+        optionLabel: (o) => o.title,
+        selectedEndpoint: (id) => endpoints.accessory.rewardMission(id),
+        help: 'For REWARD unlocks: correct answers in this mission can drop the accessory. REQUIRED for a REWARD accessory to be winnable.',
+      },
+      {
+        name: 'rewardChancePct',
+        label: 'Drop Chance %',
+        type: 'number',
+        min: 1,
+        max: 100,
+        default: 100,
+        help: 'Chance per correct answer in the reward mission (100 = guaranteed on the first correct answer).',
+      },
       { name: 'rarity', label: 'Rarity', type: 'text' },
       { name: 'iconUrl', label: 'Icon URL', type: 'text' },
       { name: 'spriteUrl', label: 'Sprite URL', type: 'text' },
-      { name: 'shopPriceCoins', label: 'Shop Price (Coins)', type: 'number', min: 0 },
+      {
+        name: 'shopPriceCoins',
+        label: 'Shop Price (Coins)',
+        type: 'number',
+        min: 0,
+        help: 'For SHOP unlocks: the Reward Shop listing is created and kept in sync with this price automatically.',
+      },
     ],
   },
 
@@ -376,6 +445,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'ghost',
     singular: 'Avatar',
     subtitle: 'Characters players race as',
+    defaultsFeature: 'avatars',
     columns: [nameCol, { key: 'key', label: 'Key', className: 'text-white/50 font-mono text-xs' }],
     fields: [
       { name: 'name', label: 'Name', type: 'text', required: true },
@@ -413,6 +483,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'cart',
     singular: 'Shop Item',
     subtitle: 'Items players buy with earned currency',
+    defaultsFeature: 'shop-items',
     columns: [
       nameCol,
       { key: 'kind', label: 'Kind', className: 'text-white/60' },
@@ -438,6 +509,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'trophy',
     singular: 'Tournament',
     subtitle: 'Time-boxed competitions with their own races, rankings and prizes',
+    defaultsFeature: 'tournaments',
     filters: [{ name: 'status', label: 'Status', options: TOURNAMENT_STATUS }],
     columns: [
       nameCol,
@@ -497,6 +569,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'rank',
     singular: 'Leaderboard',
     subtitle: 'Standings surfaces across metrics and scopes',
+    defaultsFeature: 'leaderboards',
     columns: [
       { key: 'name', label: 'Name', className: 'text-white font-medium', render: (v, r) => v || r.title || '—' },
       { key: 'metric', label: 'Metric', className: 'text-white/60' },
@@ -536,6 +609,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'bell',
     singular: 'Notification',
     subtitle: 'System messages surfaced to players',
+    defaultsFeature: 'notifications',
     columns: [
       { key: 'title', label: 'Title', className: 'text-white font-medium' },
       { key: 'channel', label: 'Channel', className: 'text-white/60' },
@@ -555,6 +629,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'certificate',
     singular: 'Certificate Template',
     subtitle: 'Designs issued on course / path completion',
+    defaultsFeature: 'certificate-templates',
     columns: [nameCol],
     fields: [
       { name: 'name', label: 'Name', type: 'text', required: true },
