@@ -7,6 +7,7 @@ import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Missions from './pages/Missions.jsx';
+import Questions from './pages/Questions.jsx';
 import MissionBundles from './pages/MissionBundles.jsx';
 import Ranks from './pages/Ranks.jsx';
 import Users from './pages/Users.jsx';
@@ -23,6 +24,7 @@ import { RESOURCE_CONFIGS } from './config/resourceConfigs.jsx';
 // views) are excluded from the generic CRUD routes.
 const DEDICATED_PAGES = {
   missions: Missions,
+  questions: Questions,
   'mission-bundles': MissionBundles,
   ranks: Ranks,
   users: Users,

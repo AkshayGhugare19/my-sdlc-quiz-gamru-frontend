@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { resourceApi } from '../services/api.js';
+import endpoints, { resourceApi } from '../services/api.js';
 import { useAuthStore } from '../store/authStore.js';
 import { EmptyState, PageHeader, Spinner, formatCell, useToast } from './ui.jsx';
 import Icon from './Icon.jsx';
@@ -32,6 +32,7 @@ export default function ResourceTable({
   rowActions,
   onRowClick,
   fixedParams,
+  headerExtras, // optional ReactNode rendered next to the "New X" button
   pageSize = 10,
 }) {
   const api = resourceApi(resourceKey);
@@ -45,6 +46,48 @@ export default function ResourceTable({
   const canCreate = can(permResource, 'create');
   const canUpdate = can(permResource, 'update');
   const canDelete = can(permResource, 'delete');
+
+  // Cross-tenant context: a SUPER ADMIN browsing WITHOUT "acting as" one org
+  // sees every tenant's rows mixed together (the seed's demo org plus any org
+  // created in the app) — what looks like duplicates is per-org copies. Add an
+  // Organization column + filter so ownership is obvious and narrowable.
+  const user = useAuthStore((s) => s.user);
+  const actingOrg = useAuthStore((s) => s.actingOrg);
+  const isSuper = user?.role === 'SUPER_ADMIN' || user?.role === 'PLATFORM_ADMIN';
+  const crossTenant = isSuper && !actingOrg && resourceKey !== 'organizations';
+  const [orgs, setOrgs] = useState([]);
+  useEffect(() => {
+    if (!crossTenant) return undefined;
+    let alive = true;
+    endpoints.organizations
+      .list({ pageSize: 200 })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.items || [];
+        if (alive) setOrgs(list);
+      })
+      .catch(() => {}); // column simply shows the raw id if orgs can't load
+    return () => {
+      alive = false;
+    };
+  }, [crossTenant]);
+  const orgName = (id) => orgs.find((o) => String(o.id) === String(id))?.name;
+  const effColumns = crossTenant
+    ? [
+        ...columns,
+        {
+          key: 'organizationId',
+          label: 'Organization',
+          render: (v) =>
+            v ? (
+              <span className="chip bg-white/10 text-white/70 border border-white/15">
+                {orgName(v) || `${String(v).slice(0, 8)}…`}
+              </span>
+            ) : (
+              <span className="chip bg-neon/10 text-neon border border-neon/20">Platform</span>
+            ),
+        },
+      ]
+    : columns;
 
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize, total: 0, totalPages: 1 });
@@ -169,12 +212,15 @@ export default function ResourceTable({
         subtitle={subtitle}
         icon={icon}
         actions={
-          canCreate ? (
-            <button onClick={openCreate} className="btn-primary flex items-center gap-2">
-              <Icon name="plus" className="w-4 h-4" />
-              New {noun}
-            </button>
-          ) : null
+          <>
+            {headerExtras}
+            {canCreate ? (
+              <button onClick={openCreate} className="btn-primary flex items-center gap-2">
+                <Icon name="plus" className="w-4 h-4" />
+                New {noun}
+              </button>
+            ) : null}
+          </>
         }
       />
 
@@ -211,6 +257,24 @@ export default function ResourceTable({
             })}
           </select>
         ))}
+        {/* Super admin only: narrow the cross-tenant view to one organization. */}
+        {crossTenant && orgs.length > 0 && (
+          <select
+            value={filterVals.organizationId || ''}
+            onChange={(e) => {
+              setPage(1);
+              setFilterVals((s) => ({ ...s, organizationId: e.target.value }));
+            }}
+            className="field !w-auto"
+          >
+            <option value="">Organization: all</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        )}
         <button onClick={load} className="btn-ghost !px-3" title="Refresh">
           <Icon name="refresh" className="w-4 h-4" />
         </button>
@@ -222,7 +286,7 @@ export default function ResourceTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-white/45 text-xs uppercase tracking-wider border-b border-white/10">
-                {columns.map((c) => (
+                {effColumns.map((c) => (
                   <th key={c.key} className="font-semibold px-4 py-3 whitespace-nowrap">
                     {c.label}
                   </th>
@@ -233,19 +297,19 @@ export default function ResourceTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={columns.length + 1} className="py-16 text-center text-white/40">
+                  <td colSpan={effColumns.length + 1} className="py-16 text-center text-white/40">
                     <Spinner className="w-6 h-6 mx-auto text-neon" />
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={columns.length + 1} className="py-12 text-center text-red-300">
+                  <td colSpan={effColumns.length + 1} className="py-12 text-center text-red-300">
                     {error}
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 1}>
+                  <td colSpan={effColumns.length + 1}>
                     <EmptyState title={`No ${title?.toLowerCase()} found`} hint={`Create your first ${noun.toLowerCase()}.`} />
                   </td>
                 </tr>
@@ -261,7 +325,7 @@ export default function ResourceTable({
                     }`}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
                   >
-                    {columns.map((c) => (
+                    {effColumns.map((c) => (
                       <td key={c.key} className={`px-4 py-3 align-middle ${c.className || 'text-white/80'}`}>
                         {c.render ? c.render(row[c.key], row) : formatCell(row[c.key])}
                       </td>

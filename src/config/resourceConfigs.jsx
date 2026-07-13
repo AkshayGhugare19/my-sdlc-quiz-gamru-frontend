@@ -46,7 +46,7 @@ const QUESTION_TYPES = [
 // ── Reusable column & field bits ──
 const publishedCol = { key: 'isPublished', label: 'Published', render: (v) => <StatusPill value={!!v} /> };
 const publishedField = { name: 'isPublished', label: 'Published', type: 'checkbox', help: 'Visible to players' };
-const slugField = { name: 'slug', label: 'Slug', type: 'text', placeholder: 'auto-generated-if-empty', help: 'URL-safe identifier' };
+const slugField = { name: 'slug', label: 'Slug', type: 'text', placeholder: 'Leave blank — auto-generated from the title', help: 'A short, URL-safe internal id (e.g. "fire-safety"). You normally leave this blank and it is generated from the title. Must be unique within your organization.' };
 const descField = { name: 'description', label: 'Description', type: 'textarea', colSpan: 2 };
 const titleCol = { key: 'title', label: 'Title', className: 'text-white font-medium' };
 const nameCol = { key: 'name', label: 'Name', className: 'text-white font-medium' };
@@ -110,13 +110,57 @@ export const RESOURCE_CONFIGS = {
     title: 'Courses',
     icon: 'book',
     singular: 'Course',
-    subtitle: 'Learning content that missions draw from',
-    filters: [{ name: 'isPublished', label: 'Published', options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] }],
-    columns: [titleCol, slugCol, publishedCol],
+    subtitle: 'Learning roadmaps — each course selects existing missions, bundles and tournaments',
+    filters: [
+      { name: 'isPublished', label: 'Published', options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] },
+      { name: 'difficulty', label: 'Difficulty', options: DIFFICULTY },
+    ],
+    columns: [
+      titleCol,
+      slugCol,
+      { key: 'difficulty', label: 'Difficulty', render: (v) => (v ? <span className="chip bg-white/10 text-white/70 border border-white/15">{v}</span> : '—') },
+      { key: 'estimatedMin', label: 'Duration', render: (v) => (v ? `${v} min` : '—') },
+      publishedCol,
+    ],
     fields: [
-      { name: 'title', label: 'Title', type: 'text', required: true },
+      // ── Course information ──
+      { name: 'title', label: 'Course Name', type: 'text', required: true, help: 'The roadmap name players see on their Courses page.' },
       slugField,
+      { name: 'coverUrl', label: 'Thumbnail URL', type: 'text', help: 'Optional image shown on the course card.' },
+      { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM', help: 'Overall difficulty label shown to learners.' },
+      { name: 'estimatedMin', label: 'Estimated Duration (min)', type: 'number', min: 0, help: 'Rough time to finish the whole roadmap.' },
       descField,
+      // ── Roadmap content — the course only REFERENCES existing entities; the
+      // same mission/bundle/tournament can be reused across many courses. ──
+      {
+        name: 'missionIds',
+        label: 'Select Missions',
+        type: 'multiReference',
+        resource: 'missions',
+        optionLabel: 'title',
+        help: 'Standalone missions in this roadmap. Create them on the Missions page first (each mission carries its own questions via its Question Category). Reusable — the same mission can be in many courses.',
+        selectedEndpoint: (id) => endpoints.course.missions(id),
+      },
+      {
+        name: 'missionBundleIds',
+        label: 'Select Mission Bundles',
+        type: 'multiReference',
+        resource: 'mission-bundles',
+        optionLabel: 'title',
+        help: 'Pillar bundles in this roadmap. A bundle brings its own missions with it — don’t also tick those missions above.',
+        selectedEndpoint: (id) => endpoints.course.bundles(id),
+      },
+      {
+        name: 'tournamentIds',
+        label: 'Select Tournaments',
+        type: 'multiReference',
+        resource: 'tournaments',
+        optionLabel: 'name',
+        help: 'Competitions that are part of this roadmap. The tournament item counts as done once the learner has joined and scored points.',
+        selectedEndpoint: (id) => endpoints.course.tournaments(id),
+      },
+      // ── Completion ──
+      { name: 'certificateTemplateId', label: 'Completion Certificate', type: 'reference', resource: 'certificate-templates', optionLabel: 'name', help: 'Optional. Issued automatically (once) when the learner completes every mission, bundle and tournament selected above.' },
       publishedField,
     ],
   },
@@ -151,18 +195,18 @@ export const RESOURCE_CONFIGS = {
       publishedCol,
     ],
     fields: [
-      { name: 'title', label: 'Title', type: 'text', required: true },
+      { name: 'title', label: 'Title', type: 'text', required: true, help: 'The pillar name players see on the map.' },
       slugField,
-      { name: 'xpReward', label: 'XP Reward', type: 'number', min: 0, default: 100 },
-      { name: 'starReward', label: 'Star Reward', type: 'number', min: 0, default: 1 },
-      { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3 },
+      { name: 'xpReward', label: 'XP Reward', type: 'number', min: 0, default: 100, help: 'Bonus XP for completing every mission in the bundle.' },
+      { name: 'starReward', label: 'Star Reward', type: 'number', min: 0, default: 1, help: 'Bonus stars granted on bundle completion.' },
+      { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3, help: 'Aggregate max — usually the sum of its missions’ max stars.' },
       {
         name: 'missionIds',
         label: 'Missions in this bundle',
         type: 'multiReference',
         resource: 'missions',
         optionLabel: 'title',
-        help: 'Pick missions to include (create them in the Missions page first)',
+        help: 'Pick the missions this pillar contains (create them on the Missions page first). The bundle has no questions of its own — each mission supplies its own, so make sure every mission here has questions attached.',
         selectedEndpoint: (id) => endpoints.missionBundle.missions(id),
       },
       descField,
@@ -188,17 +232,41 @@ export const RESOURCE_CONFIGS = {
     fields: [
       // A mission is created standalone. It is added to a bundle from the
       // Mission Bundles page (a bundle selects its missions), NOT here.
-      { name: 'title', label: 'Title', type: 'text', required: true },
+      { name: 'title', label: 'Title', type: 'text', required: true, help: 'Shown on the pillar/mission card players tap to race.' },
       slugField,
-      { name: 'courseId', label: 'Course', type: 'reference', resource: 'courses', optionLabel: 'title', help: 'Source learning content' },
-      { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM' },
-      { name: 'timerSec', label: 'Timer (sec)', type: 'number', min: 0, default: 60 },
-      { name: 'correctBonusSec', label: 'Correct Bonus (sec)', type: 'number', min: 0, default: 3 },
-      { name: 'questionCount', label: 'Question Count', type: 'number', min: 0, default: 10 },
-      { name: 'passingScorePct', label: 'Passing Score %', type: 'number', min: 0, max: 100, default: 70 },
-      { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3 },
-      { name: 'laneCount', label: 'Lane Count', type: 'number', min: 1, default: 3 },
-      { name: 'xpReward', label: 'XP Reward', type: 'number', min: 0, default: 100 },
+      { name: 'courseId', label: 'Learn-First Material', type: 'reference', resource: 'courses', optionLabel: 'title', help: 'Optional. The storyboard/content shown BEFORE the race starts. This is NOT how a mission joins a course roadmap — do that from the Course form (Select Missions).' },
+      { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM', help: 'Display label only — does not filter which questions are used.' },
+      { name: 'timerSec', label: 'Timer (sec)', type: 'number', min: 0, default: 60, help: 'Seconds on the race clock. Correct answers add the bonus below.' },
+      { name: 'correctBonusSec', label: 'Correct Bonus (sec)', type: 'number', min: 0, default: 3, help: 'Extra seconds added to the clock for each correct answer.' },
+      { name: 'questionCount', label: 'Question Count', type: 'number', min: 1, default: 10, help: 'How many of the attached questions each race uses. Must be at least 1 — keep it ≤ the number of questions you attach below.' },
+      { name: 'passingScorePct', label: 'Passing Score %', type: 'number', min: 0, max: 100, default: 70, help: 'Score needed to pass and earn full XP (0–100).' },
+      { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3, help: 'Most stars a player can earn here (one per correct answer).' },
+      { name: 'laneCount', label: 'Lane Count', type: 'number', min: 1, default: 3, help: 'Answer lanes shown per question (2–4). Give each question at least this many options.' },
+      { name: 'xpReward', label: 'XP Reward', type: 'number', min: 0, default: 100, help: 'XP granted for passing the mission.' },
+      // THE fix for "no questions yet": pick a Question Category and every
+      // question in it is attached to this mission on save — the same
+      // MissionQuestion links the seed data creates for each pillar. (You can
+      // still fine-tune individual pins/order in the builder by clicking the row.)
+      {
+        name: 'questionCategory',
+        label: 'Question Category',
+        type: 'remoteSelect',
+        required: true,
+        placeholder: 'Select a question category…',
+        optionsEndpoint: () => endpoints.questions.categories(),
+        optionValue: (o) => o.category,
+        optionLabel: (o) => `${o.category} (${o.count} question${o.count === 1 ? '' : 's'})`,
+        help: 'REQUIRED to play. Every ACTIVE question with this category is attached to the mission automatically — so it plays exactly like the seed content. Add questions under a Category in the Question Bank first; if a category is empty, the mission will have no questions. Re-save after adding questions to pick them up.',
+        // On edit, preselect the category the mission's current questions belong to.
+        selectedEndpoint: async (id) => {
+          const res = await endpoints.mission.questions(id);
+          const links = Array.isArray(res) ? res : res?.items || [];
+          const withCat = links
+            .map((l) => l.Question?.category ?? l.question?.category ?? l.category)
+            .find((c) => c);
+          return withCat ?? '';
+        },
+      },
       descField,
       publishedField,
     ],
@@ -218,10 +286,10 @@ export const RESOURCE_CONFIGS = {
       { key: 'points', label: 'Points', className: 'text-neon' },
     ],
     fields: [
-      { name: 'prompt', label: 'Prompt', type: 'textarea', required: true, colSpan: 2 },
-      { name: 'type', label: 'Type', type: 'select', options: QUESTION_TYPES, required: true, default: 'SINGLE_CHOICE' },
-      { name: 'category', label: 'Category', type: 'text' },
-      { name: 'points', label: 'Points', type: 'number', min: 0, default: 10 },
+      { name: 'prompt', label: 'Prompt', type: 'textarea', required: true, colSpan: 2, help: 'The question players read during the race. Required.' },
+      { name: 'type', label: 'Type', type: 'select', options: QUESTION_TYPES, required: true, default: 'SINGLE_CHOICE', help: 'Racing lanes use SINGLE_CHOICE / TRUE_FALSE (exactly one correct option).' },
+      { name: 'category', label: 'Category', type: 'text', help: 'A free-text label for grouping/filtering and for tournament question pools. It does NOT attach the question to a mission — do that from the Mission form. Example: "SDLC Fundamentals".' },
+      { name: 'points', label: 'Points', type: 'number', min: 0, default: 10, help: 'Score weight for this question.' },
       {
         name: 'options',
         label: 'Answer Options',
@@ -391,7 +459,19 @@ export const RESOURCE_CONFIGS = {
       // Race configuration — how this tournament's own races play (stored in gameConfig).
       { name: 'questionCount', label: 'Questions per Race', type: 'number', min: 1, max: 20, default: 5, valueFrom: (r) => r.gameConfig?.questionCount },
       { name: 'questionDifficulty', label: 'Question Difficulty', type: 'select', options: DIFFICULTY, placeholder: 'All difficulties', valueFrom: (r) => r.gameConfig?.difficulty ?? '' },
-      { name: 'questionCategories', label: 'Question Categories', type: 'text', placeholder: 'e.g. SDLC Fundamentals, Racing Knowledge', help: 'Comma-separated; blank = the whole question bank', valueFrom: (r) => (r.gameConfig?.categories ?? []).join(', ') },
+      // Same category dropdown as the mission form — pick a real category from
+      // the bank instead of typing free text. Blank = the whole question bank.
+      {
+        name: 'questionCategories',
+        label: 'Question Category',
+        type: 'remoteSelect',
+        placeholder: 'All categories (whole question bank)',
+        optionsEndpoint: () => endpoints.questions.categories(),
+        optionValue: (o) => o.category,
+        optionLabel: (o) => `${o.category} (${o.count} question${o.count === 1 ? '' : 's'})`,
+        help: 'Which question category this tournament’s races draw from. Leave blank to use the whole question bank. (If the category has no questions, races fall back to the full bank so they never come up empty.)',
+        valueFrom: (r) => (r.gameConfig?.categories ?? [])[0] ?? '',
+      },
       { name: 'timerSec', label: 'Race Timer (sec)', type: 'number', min: 30, max: 1800, default: 180, valueFrom: (r) => r.gameConfig?.timerSec },
       { name: 'laneCount', label: 'Answer Lanes', type: 'number', min: 2, max: 4, default: 3, valueFrom: (r) => r.gameConfig?.laneCount },
       { name: 'xpPerQuestion', label: 'XP per Question', type: 'number', min: 0, max: 200, default: 20, valueFrom: (r) => r.gameConfig?.xpPerQuestion },

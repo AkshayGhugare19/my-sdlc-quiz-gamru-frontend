@@ -94,7 +94,8 @@ export const endpoints = {
   learningPaths: crud('learning-paths'),
   missionBundles: crud('mission-bundles'),
   missions: crud('missions'),
-  questions: crud('questions'),
+  // Questions + the distinct-categories helper that powers the mission category picker.
+  questions: { ...crud('questions'), categories: () => http.get('/questions/categories') },
   questionOptions: crud('question-options'),
   ranks: crud('ranks'),
   badges: crud('badges'),
@@ -108,6 +109,13 @@ export const endpoints = {
   campaigns: crud('campaigns'),
   notifications: crud('notifications'),
   certificateTemplates: crud('certificate-templates'),
+
+  // ── Course roadmap builder (a course SELECTS existing missions/bundles/tournaments) ──
+  course: {
+    missions: (id) => http.get(`/courses/${id}/missions`),
+    bundles: (id) => http.get(`/courses/${id}/bundles`),
+    tournaments: (id) => http.get(`/courses/${id}/tournaments`),
+  },
 
   // ── Mission builder extras ──
   mission: {

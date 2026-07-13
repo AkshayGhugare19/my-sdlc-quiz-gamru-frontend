@@ -271,6 +271,82 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
   );
 }
 
+// A <select> whose string options are loaded from a plain endpoint (not a CRUD
+// resource) — e.g. the distinct question categories. Stores the chosen string.
+// When editing, `selectedEndpoint(id)` resolves the record's current value so it
+// shows preselected. Options may be strings or objects (mapped via optionValue /
+// optionLabel). Used by the mission "Question Category" picker.
+function RemoteSelect({ field, control, initialRow, error }) {
+  const { field: rhf } = useController({ name: field.name, control, rules: { required: field.required } });
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const valueOf = (o) => (typeof o === 'object' && o !== null ? field.optionValue?.(o) ?? o.value ?? o.category ?? o.id : o);
+  const labelOf = (o) =>
+    typeof o === 'object' && o !== null ? field.optionLabel?.(o) ?? o.label ?? String(valueOf(o)) : String(o);
+
+  useEffect(() => {
+    if (typeof field.optionsEndpoint !== 'function') {
+      setLoading(false);
+      return undefined;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await field.optionsEndpoint();
+        const items = Array.isArray(res) ? res : res?.items || [];
+        if (alive) setOptions(items);
+      } catch {
+        /* leave empty on failure */
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Preselect the record's current value when editing.
+  useEffect(() => {
+    if (!initialRow?.id || typeof field.selectedEndpoint !== 'function') return undefined;
+    let alive = true;
+    (async () => {
+      try {
+        const v = await field.selectedEndpoint(initialRow.id);
+        if (alive && v != null && v !== '') rhf.onChange(v);
+      } catch {
+        /* leave unselected on failure */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRow?.id]);
+
+  return (
+    <select
+      value={rhf.value ?? ''}
+      onChange={rhf.onChange}
+      onBlur={rhf.onBlur}
+      ref={rhf.ref}
+      className={`field ${error ? '!border-red-400/60' : ''}`}
+    >
+      <option value="">{loading ? 'Loading…' : field.placeholder || '— none —'}</option>
+      {options.map((o) => {
+        const val = valueOf(o);
+        return (
+          <option key={String(val)} value={val}>
+            {labelOf(o)}
+          </option>
+        );
+      })}
+    </select>
+  );
+}
+
 // Inline level-band rows for the rank form: each level has a number, an XP
 // start and an optional XP end (blank = open-ended top band). When editing,
 // `selectedEndpoint(id)` pre-populates the rank's current levels.
@@ -530,6 +606,8 @@ export default function ResourceForm({
               </label>
               {f.type === 'reference' ? (
                 <ReferenceSelect field={f} control={control} error={serverMsg} />
+              ) : f.type === 'remoteSelect' ? (
+                <RemoteSelect field={f} control={control} initialRow={initial} error={serverMsg} />
               ) : f.type === 'multiReference' ? (
                 <MultiReferenceSelect field={f} control={control} initialRow={initial} error={serverMsg} />
               ) : f.type === 'levelBands' ? (
