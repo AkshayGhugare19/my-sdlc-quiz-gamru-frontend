@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Poppins', system-ui, sans-serif;
+  background:
+    radial-gradient(1000px 700px at 85% -10%, rgba(34, 211, 238, 0.08) 0%, transparent 60%),
+    radial-gradient(1200px 800px at 10% 110%, rgba(11, 61, 145, 0.18) 0%, transparent 60%),
+    #0b1220;
+  color: #e6eefc;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.18);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.35);
+  background-clip: padding-box;
+}
+
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .glass-strong {
+    background: rgba(15, 27, 51, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .btn {
+    @apply rounded-xl px-5 py-2.5 font-semibold transition active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn text-night;
+    background: linear-gradient(120deg, #22d3ee, #38bdf8);
+    box-shadow: 0 8px 26px rgba(34, 211, 238, 0.28);
+  }
+  .btn-ghost {
+    @apply btn text-white/80 border border-white/10 bg-white/5 hover:bg-white/10;
+  }
+  .btn-danger {
+    @apply btn text-red-200 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20;
+  }
+
+  .field {
+    @apply w-full rounded-xl bg-black/30 border border-white/10 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-white/30 focus:border-neon focus:ring-1 focus:ring-neon/40;
+  }
+  .label {
+    @apply block text-xs font-medium mb-1.5 text-white/60;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+}

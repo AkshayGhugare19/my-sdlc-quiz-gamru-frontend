@@ -1,1 +1,1 @@
-# my-sdlc-quiz-gamru-frontend
+# sdlc-quiz-gamru-frontend
