@@ -4,6 +4,7 @@ import endpoints from '../services/api.js';
 import Icon from './Icon.jsx';
 import { EmptyState, Spinner, StatusPill } from './ui.jsx';
 import { fmtDate } from './insights.jsx';
+import { useAuthStore } from '../store/authStore.js';
 
 function Bar({ pct, accent = 'neon' }) {
   const p = Math.max(0, Math.min(100, Math.round(pct || 0)));
@@ -26,6 +27,21 @@ function Stat({ label, value, accent = 'white' }) {
   );
 }
 
+function StatInput({ label, value, onChange }) {
+  return (
+    <div className="glass rounded-xl px-3 py-2.5 text-center">
+      <input
+        type="number"
+        min="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-16 bg-black/30 border border-white/15 rounded-lg text-center text-white text-sm font-bold px-1 py-1 focus:outline-none focus:border-neon"
+      />
+      <div className="text-[11px] text-white/45 mt-0.5">{label}</div>
+    </div>
+  );
+}
+
 function Section({ icon, title, count, children }) {
   return (
     <div className="glass rounded-2xl overflow-hidden">
@@ -41,11 +57,18 @@ function Section({ icon, title, count, children }) {
   );
 }
 
-// Rich, read-only employee profile built from GET /users/:id/progress.
+// Rich employee profile built from GET /users/:id/progress. Level/XP/stars/coins
+// are inline-editable for roles with the users:update permission (ADMIN+).
 export default function EmployeeProfile({ userId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Inline stat editing — SUPER_ADMIN / ADMIN only (users:update permission).
+  const canUpdate = useAuthStore((s) => s.can('users', 'update'));
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ currentLevel: 1, totalXp: 0, stars: 0, coins: 0 });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -89,6 +112,46 @@ export default function EmployeeProfile({ userId }) {
     .join('')
     .toUpperCase();
 
+  const startEdit = () => {
+    setDraft({
+      currentLevel: user.level ?? 1,
+      totalXp: user.totalXp ?? 0,
+      stars: user.stars ?? 0,
+      coins: user.coins ?? 0,
+    });
+    setSaveError(null);
+    setEditing(true);
+  };
+
+  const saveStats = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const payload = {
+        currentLevel: Math.max(0, Number(draft.currentLevel) || 0),
+        totalXp: Math.max(0, Number(draft.totalXp) || 0),
+        stars: Math.max(0, Number(draft.stars) || 0),
+        coins: Math.max(0, Number(draft.coins) || 0),
+      };
+      await endpoints.users.update(userId, payload);
+      setData((d) => ({
+        ...d,
+        user: {
+          ...d.user,
+          level: payload.currentLevel,
+          totalXp: payload.totalXp,
+          stars: payload.stars,
+          coins: payload.coins,
+        },
+      }));
+      setEditing(false);
+    } catch (e) {
+      setSaveError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -116,12 +179,51 @@ export default function EmployeeProfile({ userId }) {
           <div className="text-sm text-white/45">{user.email}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Stat label="Level" value={user.level} accent="neon" />
-          <Stat label="Total XP" value={user.totalXp} accent="neon" />
-          <Stat label="Stars" value={user.stars} accent="amber" />
-          <Stat label="Coins" value={user.coins} accent="amber" />
+          {editing ? (
+            <>
+              <StatInput label="Level" value={draft.currentLevel} onChange={(v) => setDraft((d) => ({ ...d, currentLevel: v }))} />
+              <StatInput label="Total XP" value={draft.totalXp} onChange={(v) => setDraft((d) => ({ ...d, totalXp: v }))} />
+              <StatInput label="Stars" value={draft.stars} onChange={(v) => setDraft((d) => ({ ...d, stars: v }))} />
+              <StatInput label="Coins" value={draft.coins} onChange={(v) => setDraft((d) => ({ ...d, coins: v }))} />
+              <div className="flex flex-col gap-1.5">
+                <button
+                  onClick={saveStats}
+                  disabled={saving}
+                  className="p-1.5 rounded-lg text-emerald-300 hover:bg-emerald-400/10 border border-emerald-400/25 transition disabled:opacity-50"
+                  title="Save"
+                >
+                  {saving ? <Spinner className="w-4 h-4" /> : <Icon name="check" className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/5 border border-white/15 transition disabled:opacity-50"
+                  title="Cancel"
+                >
+                  ✕
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Stat label="Level" value={user.level} accent="neon" />
+              <Stat label="Total XP" value={user.totalXp} accent="neon" />
+              <Stat label="Stars" value={user.stars} accent="amber" />
+              <Stat label="Coins" value={user.coins} accent="amber" />
+              {canUpdate && (
+                <button
+                  onClick={startEdit}
+                  className="p-1.5 rounded-lg text-white/50 hover:text-neon hover:bg-white/5 transition"
+                  title="Edit level, XP, stars & coins"
+                >
+                  <Icon name="edit" className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
+      {saveError && <div className="text-sm text-red-300">{saveError}</div>}
 
       {/* Stat row */}
       <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
