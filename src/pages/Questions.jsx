@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import endpoints from '../services/api.js';
-import { RESOURCE_CONFIGS } from '../config/resourceConfigs.jsx';
+import { RESOURCE_CONFIGS, QUESTION_TYPES } from '../config/resourceConfigs.jsx';
 import ResourceTable from '../components/ResourceTable.jsx';
 import Modal from '../components/Modal.jsx';
 import Icon from '../components/Icon.jsx';
@@ -14,27 +14,32 @@ import { useAuthStore } from '../store/authStore.js';
 // option validation (≥2 options, exactly one correct) is exactly the same as
 // creating questions by hand — no separate code path to drift.
 
-// Rows the template workbook ships with. `correct` = 1-based option number
-// (1 = option1) or the exact text of the correct option.
+// Rows the template workbook ships with. `type` = one of the question types
+// (blank = SINGLE_CHOICE). `correct` = 1-based option number (1 = option1) or
+// the exact text of the correct option; multi-answer types (e.g.
+// MULTIPLE_CHOICE) accept a comma-separated list like "1,3".
 const TEMPLATE_ROWS = [
-  ['prompt', 'category', 'difficulty', 'points', 'explanation', 'option1', 'option2', 'option3', 'option4', 'correct'],
-  ['Which gas is the largest contributor to global warming?', 'Environment', 'MEDIUM', 10, 'Carbon dioxide (CO2) is the main greenhouse gas.', 'Carbon dioxide (CO2)', 'Oxygen', 'Nitrogen', 'Helium', 1],
-  ['Which of the following is a renewable source of energy?', 'Environment', 'EASY', 10, 'Solar energy is renewable.', 'Solar', 'Coal', 'Diesel', 'Natural gas', 1],
-  ['What does the "3Rs" principle stand for?', 'Environment', 'EASY', 10, 'Reduce, Reuse, Recycle.', 'Reduce Reuse Recycle', 'Read Write Repeat', 'Run Rest Repeat', 'Rate Review Return', 1],
-  ['Which layer of the atmosphere protects Earth from UV rays?', 'Environment', 'MEDIUM', 10, 'The ozone layer absorbs most UV radiation.', 'Ozone layer', 'Troposphere', 'Mesosphere', 'Ionosphere', 1],
+  ['prompt', 'type', 'category', 'difficulty', 'points', 'explanation', 'option1', 'option2', 'option3', 'option4', 'correct'],
+  ['Which gas is the largest contributor to global warming?', 'SINGLE_CHOICE', 'Environment', 'MEDIUM', 10, 'Carbon dioxide (CO2) is the main greenhouse gas.', 'Carbon dioxide (CO2)', 'Oxygen', 'Nitrogen', 'Helium', 1],
+  ['Which of the following are renewable sources of energy?', 'MULTIPLE_CHOICE', 'Environment', 'EASY', 10, 'Solar and wind are renewable.', 'Solar', 'Coal', 'Wind', 'Natural gas', '1,3'],
+  ['What does the "3Rs" principle stand for?', 'SINGLE_CHOICE', 'Environment', 'EASY', 10, 'Reduce, Reuse, Recycle.', 'Reduce Reuse Recycle', 'Read Write Repeat', 'Run Rest Repeat', 'Rate Review Return', 1],
+  ['The ozone layer protects Earth from UV rays.', 'TRUE_FALSE', 'Environment', 'MEDIUM', 10, 'The ozone layer absorbs most UV radiation.', 'True', 'False', '', '', 1],
 ];
 
 /** Build the template .xlsx workbook (with comfortable column widths). */
 function buildTemplateWorkbook() {
   const ws = XLSX.utils.aoa_to_sheet(TEMPLATE_ROWS);
   ws['!cols'] = [
-    { wch: 55 }, { wch: 14 }, { wch: 10 }, { wch: 7 }, { wch: 45 },
+    { wch: 55 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 7 }, { wch: 45 },
     { wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 8 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Questions');
   return wb;
 }
+
+// Types where exactly ONE option may be correct (mirrors the backend rule).
+const SINGLE_ANSWER_TYPES = ['SINGLE_CHOICE', 'TRUE_FALSE', 'IMAGE_CHOICE', 'TIMED_QUESTION', 'VIDEO_QUESTION'];
 
 // One sheet row → the exact payload the question form would submit.
 function rowToPayload(header, cells, lineNo) {
@@ -45,6 +50,14 @@ function rowToPayload(header, cells, lineNo) {
   const prompt = get('prompt');
   if (!prompt) throw new Error(`Row ${lineNo}: "prompt" is required`);
 
+  // Question type: optional column, defaults to SINGLE_CHOICE. Forgiving input
+  // ("multiple choice" / "multiple-choice" → MULTIPLE_CHOICE), strict output.
+  const typeRaw = get('type');
+  const type = typeRaw ? typeRaw.toUpperCase().replace(/[\s-]+/g, '_') : 'SINGLE_CHOICE';
+  if (!QUESTION_TYPES.includes(type)) {
+    throw new Error(`Row ${lineNo}: unknown type "${typeRaw}" — use one of: ${QUESTION_TYPES.join(', ')}`);
+  }
+
   const optionLabels = [];
   for (let n = 1; n <= 6; n++) {
     const v = get(`option${n}`);
@@ -54,24 +67,33 @@ function rowToPayload(header, cells, lineNo) {
 
   const correctRaw = get('correct');
   if (!correctRaw) throw new Error(`Row ${lineNo}: "correct" is required (option number or exact option text)`);
-  let correctIdx = -1;
-  if (/^\d+$/.test(correctRaw)) {
-    correctIdx = Number(correctRaw) - 1; // 1-based in the sheet
-  } else {
-    correctIdx = optionLabels.findIndex((l) => l.toLowerCase() === correctRaw.toLowerCase());
+  // Multi-answer types accept a comma/semicolon separated list ("1,3" or texts).
+  const correctIdxs = new Set();
+  for (const token of correctRaw.split(/[,;]/).map((s) => s.trim()).filter(Boolean)) {
+    let idx = -1;
+    if (/^\d+$/.test(token)) {
+      idx = Number(token) - 1; // 1-based in the sheet
+    } else {
+      idx = optionLabels.findIndex((l) => l.toLowerCase() === token.toLowerCase());
+    }
+    if (idx < 0 || idx >= optionLabels.length) {
+      throw new Error(`Row ${lineNo}: "correct" (${token}) doesn't match any option`);
+    }
+    correctIdxs.add(idx);
   }
-  if (correctIdx < 0 || correctIdx >= optionLabels.length) {
-    throw new Error(`Row ${lineNo}: "correct" (${correctRaw}) doesn't match any option`);
+  if (correctIdxs.size === 0) throw new Error(`Row ${lineNo}: "correct" is required`);
+  if (SINGLE_ANSWER_TYPES.includes(type) && correctIdxs.size > 1) {
+    throw new Error(`Row ${lineNo}: ${type} allows exactly one correct option — "correct" has ${correctIdxs.size}`);
   }
 
   return {
     prompt,
-    type: 'SINGLE_CHOICE',
+    type,
     category: get('category') || undefined,
     difficulty: get('difficulty') ? get('difficulty').toUpperCase() : undefined,
     points: Number(get('points')) > 0 ? Number(get('points')) : 10,
     explanation: get('explanation') || undefined,
-    options: optionLabels.map((label, i) => ({ label, isCorrect: i === correctIdx })),
+    options: optionLabels.map((label, i) => ({ label, isCorrect: correctIdxs.has(i) })),
   };
 }
 
@@ -146,12 +168,18 @@ function ImportModal({ open, onClose, onImported }) {
           </li>
           <li>
             One question per row: <span className="font-mono text-xs text-white/60">prompt</span>, optional{' '}
-            <span className="font-mono text-xs text-white/60">category / difficulty / points / explanation</span>, up
+            <span className="font-mono text-xs text-white/60">type / category / difficulty / points / explanation</span>, up
             to 6 options (<span className="font-mono text-xs text-white/60">option1…option6</span>).
           </li>
           <li>
+            <span className="font-mono text-xs text-white/60">type</span> = the question type (e.g.{' '}
+            <span className="font-mono text-xs text-white/60">SINGLE_CHOICE, MULTIPLE_CHOICE, TRUE_FALSE</span>) — blank
+            defaults to SINGLE_CHOICE.
+          </li>
+          <li>
             <span className="font-mono text-xs text-white/60">correct</span> = the option number (1&nbsp;=&nbsp;option1)
-            or the exact option text.
+            or the exact option text. Multi-answer types take a comma-separated list, e.g.{' '}
+            <span className="font-mono text-xs text-white/60">1,3</span>.
           </li>
           <li>Save and upload the Excel file here (.xlsx, .xls and .csv all work).</li>
         </ol>

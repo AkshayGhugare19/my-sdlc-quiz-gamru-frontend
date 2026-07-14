@@ -28,12 +28,23 @@ function MissionBuilder({ mission, onClose, canEdit }) {
   const [bank, setBank] = useState([]);
   const [bankSearch, setBankSearch] = useState('');
   const [bankLoading, setBankLoading] = useState(false);
+  // The mission's question category (e.g. "Environment"), derived from its
+  // attached questions — the bank below is filtered to it so you only swap in
+  // questions from the SAME category the mission was created with.
+  const [poolCategory, setPoolCategory] = useState(null);
 
   const loadAttached = useCallback(async () => {
     setLoading(true);
     try {
       const res = await endpoints.mission.questions(mission.id);
-      setAttached(Array.isArray(res) ? res : res?.items || []);
+      const links = Array.isArray(res) ? res : res?.items || [];
+      setAttached(links);
+      // Derive the mission's category from its attached questions (the mission
+      // form attaches a whole category on save, so the first one is canonical).
+      const cat = links
+        .map((l) => (l.Question || l.question || l).category)
+        .find((c) => c && String(c).trim() !== '');
+      setPoolCategory(cat ?? null);
     } catch (e) {
       toast(e.message, 'error');
     } finally {
@@ -41,17 +52,38 @@ function MissionBuilder({ mission, onClose, canEdit }) {
     }
   }, [mission.id, toast]);
 
+  // Load the WHOLE bank (every page), not just the first 20 — otherwise
+  // questions beyond page 1 look like they don't exist.
   const loadBank = useCallback(async () => {
     setBankLoading(true);
     try {
-      const res = await endpoints.questions.list({ page: 1, pageSize: 20, search: bankSearch || undefined });
-      setBank(Array.isArray(res) ? res : res?.items || []);
+      const pageSize = 200; // server page cap
+      let page = 1;
+      let all = [];
+      // Page through until the server says we have everything (hard stop at 50
+      // pages = 10k questions as a runaway guard).
+      for (;;) {
+        const res = await endpoints.questions.list({
+          page,
+          pageSize,
+          search: bankSearch || undefined,
+          // Only offer questions from the mission's own category — swapping in
+          // another category's question would break the mission's theme.
+          category: poolCategory || undefined,
+        });
+        const items = Array.isArray(res) ? res : res?.items || [];
+        all = all.concat(items);
+        const total = Array.isArray(res) ? all.length : res?.pagination?.total ?? all.length;
+        if (items.length === 0 || all.length >= total || page >= 50) break;
+        page++;
+      }
+      setBank(all);
     } catch (e) {
       toast(e.message, 'error');
     } finally {
       setBankLoading(false);
     }
-  }, [bankSearch, toast]);
+  }, [bankSearch, poolCategory, toast]);
 
   useEffect(() => {
     loadAttached();
@@ -61,19 +93,26 @@ function MissionBuilder({ mission, onClose, canEdit }) {
     return () => clearTimeout(t);
   }, [loadBank]);
 
-  // Normalize a link row into { question, orderIndex, isPinned }.
+  // Normalize a link row into { question, orderIndex, isPinned }. The API
+  // nests the question under `Question` (Sequelize association name) — accept
+  // both casings so the pool shows real prompts/types, not "Question <id>".
   const linkView = (row) => {
-    const q = row.question || row;
+    const q = row.Question || row.question || row;
     return {
       questionId: q.id ?? row.questionId,
       prompt: q.prompt || q.title || `Question ${q.id ?? row.questionId}`,
       type: q.type,
+      category: q.category,
       orderIndex: row.orderIndex,
       isPinned: !!row.isPinned,
     };
   };
   const views = attached.map(linkView);
   const attachedIds = new Set(views.map((v) => v.questionId));
+  // The pool is capped at the mission's Question Count (set on the mission
+  // form) — attaching past it is blocked here and by the server.
+  const limit = Number(mission.questionCount) || null;
+  const poolFull = limit != null && views.length >= limit;
 
   const attach = async (question, isPinned = false) => {
     setBusy(true);
@@ -131,7 +170,9 @@ function MissionBuilder({ mission, onClose, canEdit }) {
             <Icon name="target" className="w-4 h-4 text-neon" />
             Question Pool
           </h4>
-          <span className="text-xs text-white/40">{views.length} attached</span>
+          <span className={`text-xs ${poolFull ? 'text-amber-300' : 'text-white/40'}`}>
+            {limit != null ? `${views.length}/${limit} attached` : `${views.length} attached`}
+          </span>
         </div>
         <div className="space-y-2 max-h-[52vh] overflow-y-auto pr-1">
           {loading ? (
@@ -145,7 +186,12 @@ function MissionBuilder({ mission, onClose, canEdit }) {
               <div key={v.questionId} className="rounded-xl bg-black/20 border border-white/10 p-3">
                 <p className="text-sm text-white/85 line-clamp-2">{v.prompt}</p>
                 <div className="flex items-center justify-between mt-2">
-                  <span className="chip bg-white/10 text-white/60 border border-white/15">{v.type || 'question'}</span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="chip bg-neon/10 text-neon border border-neon/20">{v.type || 'question'}</span>
+                    {v.category && (
+                      <span className="chip bg-amber-400/10 text-amber-300 border border-amber-400/20">{v.category}</span>
+                    )}
+                  </div>
                   {canEdit && (
                     <div className="flex items-center gap-1">
                       <button
@@ -181,7 +227,13 @@ function MissionBuilder({ mission, onClose, canEdit }) {
           <h4 className="text-sm font-semibold text-white/80 flex items-center gap-2">
             <Icon name="help" className="w-4 h-4 text-amber-300" />
             Question Bank
+            {poolCategory && (
+              <span className="chip bg-amber-400/10 text-amber-300 border border-amber-400/20">{poolCategory}</span>
+            )}
           </h4>
+          <span className="text-xs text-white/40">
+            {bankLoading ? '…' : `${bank.length} in ${poolCategory ? `"${poolCategory}"` : 'bank'}`}
+          </span>
         </div>
         <div className="relative mb-2">
           <Icon name="search" className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
@@ -192,13 +244,27 @@ function MissionBuilder({ mission, onClose, canEdit }) {
             className="field !pl-9"
           />
         </div>
+        {canEdit && poolFull && (
+          <div className="rounded-xl bg-amber-400/10 border border-amber-400/20 px-3 py-2 mb-2 text-xs text-amber-200">
+            Pool is at the mission&apos;s Question Count limit ({limit}). Detach a question — or raise Question Count on
+            the mission edit form — to attach more.
+          </div>
+        )}
         <div className="space-y-2 max-h-[46vh] overflow-y-auto pr-1">
           {bankLoading ? (
             <div className="py-10 grid place-items-center text-neon">
               <Spinner className="w-6 h-6" />
             </div>
           ) : bank.length === 0 ? (
-            <EmptyState icon="help" title="No questions found" />
+            <EmptyState
+              icon="help"
+              title="No questions found"
+              hint={
+                poolCategory
+                  ? `No more "${poolCategory}" questions in the bank — add some on the Question Bank page.`
+                  : undefined
+              }
+            />
           ) : (
             bank.map((q) => {
               const isAttached = attachedIds.has(q.id);
@@ -206,14 +272,29 @@ function MissionBuilder({ mission, onClose, canEdit }) {
                 <div key={q.id} className="rounded-xl bg-black/20 border border-white/10 p-3 flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white/85 line-clamp-2">{q.prompt || q.title}</p>
-                    <span className="chip bg-white/10 text-white/60 border border-white/15 mt-1">{q.type}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                      <span className="chip bg-neon/10 text-neon border border-neon/20">{q.type}</span>
+                      {q.category && (
+                        <span className="chip bg-amber-400/10 text-amber-300 border border-amber-400/20">{q.category}</span>
+                      )}
+                    </div>
                   </div>
                   {canEdit && (
                     <button
                       onClick={() => attach(q)}
-                      disabled={busy || isAttached}
-                      className={isAttached ? 'btn-ghost !px-2.5 !py-1.5 opacity-50' : 'btn-primary !px-2.5 !py-1.5'}
-                      title={isAttached ? 'Already attached' : 'Attach'}
+                      disabled={busy || isAttached || poolFull}
+                      className={
+                        isAttached || poolFull
+                          ? 'btn-ghost !px-2.5 !py-1.5 opacity-50 cursor-not-allowed'
+                          : 'btn-primary !px-2.5 !py-1.5'
+                      }
+                      title={
+                        isAttached
+                          ? 'Already attached'
+                          : poolFull
+                            ? `Pool full — the mission uses ${limit} questions`
+                            : 'Attach'
+                      }
                     >
                       <Icon name={isAttached ? 'check' : 'link'} className="w-4 h-4" />
                     </button>

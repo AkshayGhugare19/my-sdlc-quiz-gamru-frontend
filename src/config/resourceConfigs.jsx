@@ -28,7 +28,13 @@ const SHOP_KIND = ['ACCESSORY', 'COUPON', 'TITLE', 'COMPANY_REWARD', 'BADGE', 'C
 const REWARD_TYPE = ['XP', 'COINS', 'STARS', 'BADGE', 'TITLE', 'ACCESSORY', 'CERTIFICATE', 'COUPON', 'CUSTOM'];
 const REWARD_REFTYPE = ['MISSION', 'MISSION_BUNDLE', 'TOURNAMENT'];
 const UNLOCK_TYPE = ['REWARD', 'SHOP', 'DEFAULT'];
-const QUESTION_TYPES = [
+const ACCESSORY_RARITY = [
+  { value: 'common', label: 'Common' },
+  { value: 'rare', label: 'Rare' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'legendary', label: 'Legendary' },
+];
+export const QUESTION_TYPES = [
   'SINGLE_CHOICE',
   'MULTIPLE_CHOICE',
   'TRUE_FALSE',
@@ -240,7 +246,7 @@ export const RESOURCE_CONFIGS = {
       { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM', help: 'Display label only — does not filter which questions are used.' },
       { name: 'timerSec', label: 'Timer (sec)', type: 'number', min: 0, default: 60, help: 'Seconds on the race clock. Correct answers add the bonus below.' },
       { name: 'correctBonusSec', label: 'Correct Bonus (sec)', type: 'number', min: 0, default: 3, help: 'Extra seconds added to the clock for each correct answer.' },
-      { name: 'questionCount', label: 'Question Count', type: 'number', min: 1, default: 10, help: 'How many of the attached questions each race uses. Must be at least 1 — keep it ≤ the number of questions you attach below.' },
+      { name: 'questionCount', label: 'Question Count', type: 'number', min: 1, default: 10, help: 'How many of the attached questions each race uses. Must be ≤ the number of questions in the selected Question Category (the save is rejected otherwise, so races never come up short).' },
       { name: 'passingScorePct', label: 'Passing Score %', type: 'number', min: 0, max: 100, default: 70, help: 'Score needed to pass and earn full XP (0–100).' },
       { name: 'maxStars', label: 'Max Stars', type: 'number', min: 0, default: 3, help: 'Most stars a player can earn here (one per correct answer).' },
       { name: 'laneCount', label: 'Lane Count', type: 'number', min: 1, default: 3, help: 'Answer lanes shown per question (2–4). Give each question at least this many options.' },
@@ -426,7 +432,7 @@ export const RESOURCE_CONFIGS = {
         default: 100,
         help: 'Chance per correct answer in the reward mission (100 = guaranteed on the first correct answer).',
       },
-      { name: 'rarity', label: 'Rarity', type: 'text' },
+      { name: 'rarity', label: 'Rarity', type: 'select', options: ACCESSORY_RARITY, default: 'common', help: 'Shown as a colored badge in the player Garage.' },
       { name: 'iconUrl', label: 'Icon URL', type: 'text' },
       { name: 'spriteUrl', label: 'Sprite URL', type: 'text' },
       {
@@ -473,7 +479,17 @@ export const RESOURCE_CONFIGS = {
       { name: 'refType', label: 'Ref Type', type: 'select', options: REWARD_REFTYPE, required: true },
       { name: 'missionId', label: 'Mission', type: 'reference', resource: 'missions', optionLabel: 'title', help: 'Optional' },
       { name: 'missionBundleId', label: 'Mission Bundle', type: 'reference', resource: 'mission-bundles', optionLabel: 'title', help: 'Optional' },
-      { name: 'targetId', label: 'Target ID', type: 'text', help: 'badge/accessory/certificate id' },
+      {
+        name: 'targetId',
+        label: 'Target Item',
+        type: 'dependentReference',
+        dependsOn: 'type',
+        resourceByValue: { BADGE: 'badges', ACCESSORY: 'accessories', CERTIFICATE: 'certificate-templates' },
+        optionLabel: 'name',
+        placeholder: 'Select the item to grant…',
+        notApplicableText: 'Only used for BADGE / ACCESSORY / CERTIFICATE rewards',
+        help: 'For BADGE, ACCESSORY and CERTIFICATE rewards: the exact item granted by this rule.',
+      },
     ],
   },
 
@@ -497,7 +513,17 @@ export const RESOURCE_CONFIGS = {
       { name: 'priceStars', label: 'Price (Stars)', type: 'number', min: 0, default: 0 },
       { name: 'stock', label: 'Stock', type: 'number', min: 0, help: 'blank = unlimited' },
       { name: 'imageUrl', label: 'Image URL', type: 'text' },
-      { name: 'targetId', label: 'Target ID', type: 'text' },
+      {
+        name: 'targetId',
+        label: 'Target Item',
+        type: 'dependentReference',
+        dependsOn: 'kind',
+        resourceByValue: { ACCESSORY: 'accessories', BADGE: 'badges' },
+        optionLabel: 'name',
+        placeholder: 'Select the item this listing unlocks…',
+        notApplicableText: 'Only used for ACCESSORY / BADGE kinds',
+        help: 'For ACCESSORY and BADGE listings: the exact item the buyer receives. Other kinds don’t need a target.',
+      },
       { name: 'isActive', label: 'Active', type: 'checkbox', default: true },
       descField,
     ],

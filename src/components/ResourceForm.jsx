@@ -1,4 +1,4 @@
-import { useForm, useController } from 'react-hook-form';
+import { useForm, useController, useWatch } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import endpoints from '../services/api.js';
 import { Spinner } from './ui.jsx';
@@ -304,6 +304,93 @@ function MultiReferenceSelect({ field, control, initialRow, error }) {
           <div className="text-xs text-white/40 mt-1">Loading current selection…</div>
         ))}
     </div>
+  );
+}
+
+// A reference <select> whose SOURCE RESOURCE depends on another field's value —
+// e.g. a shop item's Target: kind=ACCESSORY lists accessories, kind=BADGE lists
+// badges, other kinds need no target at all. Config:
+//   { type:'dependentReference', dependsOn:'kind', resourceByValue:{ ACCESSORY:'accessories', … } }
+// A stale id (picked under a different controlling value) is cleared once the
+// new option list loads, so a kind switch can never submit a mismatched target.
+function DependentReferenceSelect({ field, control, error }) {
+  const { field: rhf } = useController({ name: field.name, control, rules: { required: field.required } });
+  const controllingValue = useWatch({ control, name: field.dependsOn });
+  const resource = field.resourceByValue?.[controllingValue] || null;
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setOptions([]);
+    setFailed(false);
+    if (!resource) return undefined;
+    const lister = refLister(resource);
+    if (!lister) {
+      setFailed(true);
+      return undefined;
+    }
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await lister({ pageSize: 200 });
+        const items = Array.isArray(res) ? res : res?.items || [];
+        if (alive) setOptions(items);
+      } catch {
+        if (alive) setFailed(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [resource]);
+
+  // Drop a selection that doesn't belong to the current option list.
+  useEffect(() => {
+    if (loading || failed || !resource) return;
+    if (rhf.value && !options.some((o) => String(o.id) === String(rhf.value))) rhf.onChange('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, failed, resource, options]);
+
+  if (!resource) {
+    return (
+      <div className="field !py-2.5 text-sm text-white/35 select-none cursor-not-allowed">
+        {field.notApplicableText || 'Not applicable for this selection'}
+      </div>
+    );
+  }
+  // Graceful fallback: if the endpoint is unavailable, behave like text.
+  if (failed) {
+    return (
+      <input
+        type="text"
+        value={rhf.value ?? ''}
+        onChange={rhf.onChange}
+        onBlur={rhf.onBlur}
+        ref={rhf.ref}
+        placeholder={field.placeholder}
+        className={`field ${error ? '!border-red-400/60' : ''}`}
+      />
+    );
+  }
+  return (
+    <select
+      value={rhf.value ?? ''}
+      onChange={rhf.onChange}
+      onBlur={rhf.onBlur}
+      ref={rhf.ref}
+      className={`field ${error ? '!border-red-400/60' : ''}`}
+    >
+      <option value="">{loading ? 'Loading…' : field.placeholder || '— none —'}</option>
+      {options.map((o) => (
+        <option key={o.id} value={o.id}>
+          {optionLabelFor(o, field.optionLabel)}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -642,6 +729,8 @@ export default function ResourceForm({
               </label>
               {f.type === 'reference' ? (
                 <ReferenceSelect field={f} control={control} error={serverMsg} />
+              ) : f.type === 'dependentReference' ? (
+                <DependentReferenceSelect field={f} control={control} error={serverMsg} />
               ) : f.type === 'remoteSelect' ? (
                 <RemoteSelect field={f} control={control} initialRow={initial} error={serverMsg} />
               ) : f.type === 'multiReference' ? (
