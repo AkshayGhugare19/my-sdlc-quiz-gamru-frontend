@@ -1,4 +1,4 @@
-import { useForm, Controller, useController } from 'react-hook-form';
+import { useForm, useController } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import endpoints from '../services/api.js';
 import { Spinner } from './ui.jsx';
@@ -115,6 +115,7 @@ function optionLabelFor(row, optionLabel) {
 // A <select> populated from a related resource's list endpoint. Controlled via
 // react-hook-form so the current value shows correctly after the async fetch.
 function ReferenceSelect({ field, control, error }) {
+  const { field: rhf } = useController({ name: field.name, control, rules: { required: field.required } });
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -143,50 +144,51 @@ function ReferenceSelect({ field, control, error }) {
     };
   }, [field.resource]);
 
+  // A required select displays its FIRST option as soon as the list loads, so
+  // commit that option to form state too — otherwise submitting fails with
+  // "This field is required" on a field that looks pre-filled, until the user
+  // manually re-selects the same value.
+  useEffect(() => {
+    if (loading || failed || !field.required) return;
+    if ((rhf.value == null || rhf.value === '') && options.length) rhf.onChange(options[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, failed, options]);
+
+  // Graceful fallback: if the endpoint is unavailable, behave like text.
+  if (failed) {
+    return (
+      <input
+        type="text"
+        value={rhf.value ?? ''}
+        onChange={rhf.onChange}
+        onBlur={rhf.onBlur}
+        ref={rhf.ref}
+        placeholder={field.placeholder}
+        className={`field ${error ? '!border-red-400/60' : ''}`}
+      />
+    );
+  }
   return (
-    <Controller
-      name={field.name}
-      control={control}
-      rules={{ required: field.required }}
-      render={({ field: rhf }) => {
-        // Graceful fallback: if the endpoint is unavailable, behave like text.
-        if (failed) {
-          return (
-            <input
-              type="text"
-              value={rhf.value ?? ''}
-              onChange={rhf.onChange}
-              onBlur={rhf.onBlur}
-              ref={rhf.ref}
-              placeholder={field.placeholder}
-              className={`field ${error ? '!border-red-400/60' : ''}`}
-            />
-          );
-        }
-        return (
-          <select
-            value={rhf.value ?? ''}
-            onChange={rhf.onChange}
-            onBlur={rhf.onBlur}
-            ref={rhf.ref}
-            className={`field ${error ? '!border-red-400/60' : ''}`}
-          >
-            {!field.required && <option value="">— none —</option>}
-            {loading ? (
-              <option value="" disabled>
-                Loading…
-              </option>
-            ) : (
-              options.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {optionLabelFor(o, field.optionLabel)}
-                </option>
-              ))
-            )}
-          </select>
-        );
-      }}
-    />
+    <select
+      value={rhf.value ?? ''}
+      onChange={rhf.onChange}
+      onBlur={rhf.onBlur}
+      ref={rhf.ref}
+      className={`field ${error ? '!border-red-400/60' : ''}`}
+    >
+      {!field.required && <option value="">— none —</option>}
+      {loading ? (
+        <option value="" disabled>
+          Loading…
+        </option>
+      ) : (
+        options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {optionLabelFor(o, field.optionLabel)}
+          </option>
+        ))
+      )}
+    </select>
   );
 }
 
