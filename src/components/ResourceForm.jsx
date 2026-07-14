@@ -2,6 +2,7 @@ import { useForm, Controller, useController } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import endpoints from '../services/api.js';
 import { Spinner } from './ui.jsx';
+import PasswordInput from './PasswordInput.jsx';
 
 // Renders a form from a `fields` config array and calls onSubmit with a cleaned payload.
 // Field shape: { name, label, type, options?, required?, placeholder?, help?, colSpan?, min, max, step }
@@ -673,9 +674,15 @@ export default function ResourceForm({
                   placeholder={f.placeholder}
                   className={`field ${f.type === 'json' ? 'font-mono text-xs' : ''} ${serverMsg ? '!border-red-400/60' : ''}`}
                 />
+              ) : f.type === 'password' ? (
+                <PasswordInput
+                  {...register(f.name, { required: f.required })}
+                  placeholder={f.placeholder}
+                  className={`field ${serverMsg ? '!border-red-400/60' : ''}`}
+                />
               ) : (
                 <input
-                  type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : f.type === 'password' ? 'password' : f.type === 'datetime' ? 'datetime-local' : 'text'}
+                  type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : f.type === 'datetime' ? 'datetime-local' : 'text'}
                   step={f.step}
                   min={f.min}
                   max={f.max}

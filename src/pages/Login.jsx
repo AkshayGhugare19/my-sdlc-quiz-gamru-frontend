@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore.js';
 import Icon from '../components/Icon.jsx';
 import { Spinner } from '../components/ui.jsx';
+import PasswordInput from '../components/PasswordInput.jsx';
 
 export default function Login() {
   const login = useAuthStore((s) => s.login);
@@ -77,7 +78,7 @@ export default function Login() {
           <input {...register('email')} className="field mb-4" autoComplete="username" />
 
           <label className="label">Password</label>
-          <input type="password" {...register('password')} className="field mb-5" autoComplete="current-password" />
+          <PasswordInput {...register('password')} className="field" wrapperClassName="mb-5" autoComplete="current-password" />
 
           {error && (
             <div className="text-red-300 text-sm mb-4 rounded-lg bg-red-500/10 border border-red-500/25 px-3 py-2">
