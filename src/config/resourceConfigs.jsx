@@ -36,17 +36,17 @@ const ACCESSORY_RARITY = [
 ];
 export const QUESTION_TYPES = [
   'SINGLE_CHOICE',
-  'MULTIPLE_CHOICE',
-  'TRUE_FALSE',
-  'IMAGE_CHOICE',
-  'DRAG_DROP',
-  'ARRANGE_ORDER',
-  'HOTSPOT',
-  'FILL_IN_BLANK',
-  'MATCH_PAIR',
-  'SCENARIO_BASED',
-  'VIDEO_QUESTION',
-  'TIMED_QUESTION',
+  // 'MULTIPLE_CHOICE',
+  // 'TRUE_FALSE',
+  // 'IMAGE_CHOICE',
+  // 'DRAG_DROP',
+  // 'ARRANGE_ORDER',
+  // 'HOTSPOT',
+  // 'FILL_IN_BLANK',
+  // 'MATCH_PAIR',
+  // 'SCENARIO_BASED',
+  // 'VIDEO_QUESTION',
+  // 'TIMED_QUESTION',
 ];
 
 // ── Reusable column & field bits ──
