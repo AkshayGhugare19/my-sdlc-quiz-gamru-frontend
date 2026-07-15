@@ -1,9 +1,9 @@
 {
-  "name": "GamifiedLearning-frontend",
+  "name": "Gamru-frontend",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "GamifiedLearning  Admin Console — gamification-engine admin for the corporate gamified learning platform (frontend only, talks to the GamifiedLearning  REST API).",
+  "description": "Gamru  Admin Console — gamification-engine admin for the corporate gamified learning platform (frontend only, talks to the Gamru REST API).",
   "scripts": {
     "dev": "vite --port 5173",
     "build": "vite build",

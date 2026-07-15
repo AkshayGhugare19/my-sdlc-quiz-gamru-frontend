@@ -1,6 +1,6 @@
 // ============================================================================
-// The SINGLE place the GamifiedLearning  Admin Console talks to the GamifiedLearning  REST API.
-// There is no admin backend — every endpoint below is served by the GamifiedLearning 
+// The SINGLE place the Gamru  Admin Console talks to the Gamru  REST API.
+// There is no admin backend — every endpoint below is served by the Gamru 
 // API (VITE_GAMRU_API_URL). This file owns: the axios instance, the auth
 // token plumbing (localStorage `ng_token`), the { success, message, data }
 // envelope unwrapping, and a single `endpoints` object grouping every call.

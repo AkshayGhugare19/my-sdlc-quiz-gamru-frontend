@@ -24,7 +24,7 @@ export default function Sidebar() {
           <Icon name="spark" className="w-5 h-5" strokeWidth={2.2} />
         </div>
         <div className="leading-tight">
-          <div className="font-extrabold tracking-tight text-white">GamifiedLearning </div>
+          <div className="font-extrabold tracking-tight text-white">Gamru </div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-neon/80">Admin Console</div>
         </div>
       </div>

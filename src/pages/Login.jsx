@@ -34,7 +34,7 @@ export default function Login() {
             <Icon name="spark" className="w-6 h-6" strokeWidth={2.2} />
           </div>
           <div>
-            <div className="font-extrabold text-xl tracking-tight text-white">GamifiedLearning </div>
+            <div className="font-extrabold text-xl tracking-tight text-white">Gamru </div>
             <div className="text-[11px] uppercase tracking-[0.25em] text-neon/80">Admin Console</div>
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="relative text-white/30 text-xs">© {new Date().getFullYear()} GamifiedLearning  · Gamification Engine</div>
+        <div className="relative text-white/30 text-xs">© {new Date().getFullYear()} Gamru · Gamification Engine</div>
       </div>
 
       {/* Form panel */}
@@ -69,7 +69,7 @@ export default function Login() {
         >
           <div className="lg:hidden flex items-center gap-2 mb-6">
             <Icon name="spark" className="w-6 h-6 text-neon" />
-            <span className="font-extrabold text-lg text-white">GamifiedLearning </span>
+            <span className="font-extrabold text-lg text-white">Gamru </span>
           </div>
           <div className="text-neon text-xs font-bold tracking-[0.2em]">WELCOME BACK</div>
           <h1 className="text-2xl font-extrabold mt-1 mb-6 text-white">Sign in to the console</h1>

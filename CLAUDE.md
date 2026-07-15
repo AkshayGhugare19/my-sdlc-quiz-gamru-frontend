@@ -1,9 +1,9 @@
-# CLAUDE.md — GamifiedLearning admin console
+# CLAUDE.md — Gamru admin console
 
 Frontend-only admin console for staff (SUPER_ADMIN / ADMIN / TRAINER / MANAGER). React 18 + Vite 6 +
 Tailwind 3 + zustand + react-router 6 + react-hook-form + framer-motion + **xlsx (SheetJS)**. No backend
-of its own — it calls the GamifiedLearning API directly (sibling repo `my-sdlc-quiz-gamru-backend`,
-`:4000`). Folder is `my-sdlc-quiz-gamru-frontend` but package/brand is "GamifiedLearning".
+of its own — it calls the Gamru API directly (sibling repo `my-sdlc-quiz-gamru-backend`,
+`:4000`). Folder is `my-sdlc-quiz-gamru-frontend` but package/brand is "Gamru".
 
 **The architecture is config-driven:** most pages are generic CRUD generated from a single config map.
 Before adding a page, check whether it can just be a new `RESOURCE_CONFIGS` entry.

@@ -29,7 +29,7 @@ export default function Topbar() {
     <header className="sticky top-0 z-20 h-16 glass-strong border-b border-white/10 flex items-center gap-4 px-4 lg:px-6">
       <div className="flex items-center gap-2 text-white/60 lg:hidden">
         <Icon name="spark" className="w-5 h-5 text-neon" />
-        <span className="font-bold text-white">GamifiedLearning </span>
+        <span className="font-bold text-white">Gamru </span>
       </div>
 
       <div className="flex-1" />
