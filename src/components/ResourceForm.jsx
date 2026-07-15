@@ -36,6 +36,19 @@ function coerce(field, value) {
         title: r.title || undefined,
       }));
   }
+  if (field.type === 'points') {
+    // Storyboard panels live directly on the record (JSONB), loaded synchronously
+    // from `initial` — so an array here is authoritative. Drop fully-blank rows.
+    if (!Array.isArray(value)) return undefined;
+    return value
+      .map((p) => ({
+        title: String(p.title ?? '').trim(),
+        description: String(p.description ?? '').trim(),
+        imageUrl: String(p.imageUrl ?? '').trim(),
+        instructions: String(p.instructions ?? '').trim(),
+      }))
+      .filter((p) => p.title || p.description || p.imageUrl || p.instructions);
+  }
   if (value === '' || value === undefined) return field.required ? value : undefined;
   if (field.type === 'number') {
     const n = Number(value);
@@ -81,6 +94,19 @@ function buildDefaults(fields, initial) {
       // Same protection as multiReference: while an existing record's rows are
       // still loading, the value is undefined and the field is omitted on save.
       d[f.name] = Array.isArray(v) ? v : initial?.id && f.selectedEndpoint ? undefined : [];
+      continue;
+    }
+    if (f.type === 'points') {
+      // Storyboard panels come inline on the record (JSONB) — no async load — so
+      // normalise straight from `initial`; a new record starts with none.
+      d[f.name] = Array.isArray(v)
+        ? v.map((p) => ({
+            title: p?.title ?? '',
+            description: p?.description ?? '',
+            imageUrl: p?.imageUrl ?? '',
+            instructions: p?.instructions ?? '',
+          }))
+        : [];
       continue;
     }
     if (f.type === 'json' && v && typeof v === 'object') v = JSON.stringify(v, null, 2);
@@ -635,6 +661,73 @@ function AnswerOptionsEditor({ field, control, initialRow, error }) {
   );
 }
 
+// Ordered storyboard "points" for a learning path — each point is a panel with a
+// title, image, description and instructions (the 6-panel chapter layout). Stored
+// inline on the record as a JSONB array, so there's no async preselect: the "+ Add
+// point" button appends a blank panel and blank panels are dropped on save.
+function PointsEditor({ field, control }) {
+  const { field: rhf } = useController({ name: field.name, control });
+  const rows = Array.isArray(rhf.value) ? rhf.value : [];
+
+  const setCell = (i, key, val) => rhf.onChange(rows.map((r, idx) => (idx === i ? { ...r, [key]: val } : r)));
+  const removeRow = (i) => rhf.onChange(rows.filter((_, idx) => idx !== i));
+  const addRow = () => rhf.onChange([...rows, { title: '', description: '', imageUrl: '', instructions: '' }]);
+
+  return (
+    <div className="rounded-xl bg-black/20 border border-white/10 p-3 space-y-3">
+      {rows.map((r, i) => (
+        <div key={i} className="rounded-lg bg-white/[0.04] border border-white/10 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="chip bg-neon/10 text-neon border border-neon/20">Point {i + 1}</span>
+            <button
+              type="button"
+              onClick={() => removeRow(i)}
+              className="p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-white/5 transition"
+              title="Remove point"
+            >
+              ✕
+            </button>
+          </div>
+          <input
+            type="text"
+            value={r.title ?? ''}
+            onChange={(e) => setCell(i, 'title', e.target.value)}
+            placeholder="Title (e.g. Medical Emergency)"
+            className="field !px-3 !py-2 text-sm"
+          />
+          <input
+            type="text"
+            value={r.imageUrl ?? ''}
+            onChange={(e) => setCell(i, 'imageUrl', e.target.value)}
+            placeholder="Image URL"
+            className="field !px-3 !py-2 text-sm"
+          />
+          <textarea
+            rows={2}
+            value={r.description ?? ''}
+            onChange={(e) => setCell(i, 'description', e.target.value)}
+            placeholder="Description"
+            className="field !px-3 !py-2 text-sm"
+          />
+          <textarea
+            rows={2}
+            value={r.instructions ?? ''}
+            onChange={(e) => setCell(i, 'instructions', e.target.value)}
+            placeholder="Instructions (e.g. Press SPACE 3 times to give chest compressions)"
+            className="field !px-3 !py-2 text-sm"
+          />
+        </div>
+      ))}
+      {rows.length === 0 && (
+        <div className="text-sm text-white/35 px-0.5 py-1">No points yet — add the first storyboard panel.</div>
+      )}
+      <button type="button" onClick={addRow} className="text-sm font-semibold text-neon hover:text-white transition">
+        + Add point
+      </button>
+    </div>
+  );
+}
+
 export default function ResourceForm({
   fields,
   initial,
@@ -703,7 +796,8 @@ export default function ResourceForm({
             f.type === 'json' ||
             f.type === 'multiReference' ||
             f.type === 'levelBands' ||
-            f.type === 'answerOptions'
+            f.type === 'answerOptions' ||
+            f.type === 'points'
               ? 'sm:col-span-2'
               : '';
           const serverMsg = fieldErrors?.[f.name];
@@ -739,6 +833,8 @@ export default function ResourceForm({
                 <LevelBandsEditor field={f} control={control} initialRow={initial} />
               ) : f.type === 'answerOptions' ? (
                 <AnswerOptionsEditor field={f} control={control} initialRow={initial} error={serverMsg} />
+              ) : f.type === 'points' ? (
+                <PointsEditor field={f} control={control} />
               ) : f.type === 'select' ? (
                 <select
                   {...register(f.name, { required: f.required })}

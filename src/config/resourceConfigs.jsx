@@ -28,6 +28,15 @@ const SHOP_KIND = ['ACCESSORY', 'COUPON', 'TITLE', 'COMPANY_REWARD', 'BADGE', 'C
 const REWARD_TYPE = ['XP', 'COINS', 'STARS', 'BADGE', 'TITLE', 'ACCESSORY', 'CERTIFICATE', 'COUPON', 'CUSTOM'];
 const REWARD_REFTYPE = ['MISSION', 'MISSION_BUNDLE', 'TOURNAMENT'];
 const UNLOCK_TYPE = ['REWARD', 'SHOP', 'DEFAULT'];
+// A learning path is a storyboard for exactly one kind of entity. `type` decides
+// which creation form's "Select Learning Path" dropdown lists it.
+const LEARNING_PATH_TYPE = [
+  { value: 'COURSE', label: 'Course' },
+  { value: 'MISSION', label: 'Mission' },
+  { value: 'MISSION_BUNDLE', label: 'Mission Bundle' },
+  { value: 'TOURNAMENT', label: 'Tournament' },
+];
+const LP_TYPE_LABEL = Object.fromEntries(LEARNING_PATH_TYPE.map((t) => [t.value, t.label]));
 const ACCESSORY_RARITY = [
   { value: 'common', label: 'Common' },
   { value: 'rare', label: 'Rare' },
@@ -61,6 +70,21 @@ const slugCol = { key: 'slug', label: 'Slug', className: 'text-white/50 font-mon
 // Reference option label for a user row.
 const userLabel = (r) =>
   r.displayName || `${r.firstName || ''} ${r.lastName || ''}`.trim() || r.email || String(r.id);
+
+// A "Select Learning Path" dropdown, filtered to paths of ONE type, reused by the
+// course / mission / bundle / tournament forms. The chosen path id is stored on
+// the entity as `learningPathId` — the row already carries it, so editing shows it
+// preselected without a `selectedEndpoint`. Only same-type paths are ever listed.
+const learningPathField = (type) => ({
+  name: 'learningPathId',
+  label: 'Select Learning Path',
+  type: 'remoteSelect',
+  placeholder: 'No learning path',
+  optionsEndpoint: () => endpoints.learningPaths.list({ type, pageSize: 200 }),
+  optionValue: (o) => o.id,
+  optionLabel: (o) => o.title,
+  help: `Optional storyboard shown before play. Only "${LP_TYPE_LABEL[type]}" learning paths appear here — create them on the Learning Paths page with Type = ${LP_TYPE_LABEL[type]}.`,
+});
 
 // ── Config map. Key === route path segment. ──
 export const RESOURCE_CONFIGS = {
@@ -136,6 +160,7 @@ export const RESOURCE_CONFIGS = {
       { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM', help: 'Overall difficulty label shown to learners.' },
       { name: 'estimatedMin', label: 'Estimated Duration (min)', type: 'number', min: 0, help: 'Rough time to finish the whole roadmap.' },
       descField,
+      learningPathField('COURSE'),
       // ── Roadmap content — the course only REFERENCES existing entities; the
       // same mission/bundle/tournament can be reused across many courses. ──
       {
@@ -176,12 +201,34 @@ export const RESOURCE_CONFIGS = {
     title: 'Learning Paths',
     icon: 'route',
     singular: 'Learning Path',
-    subtitle: 'Ordered journeys through courses and missions',
-    columns: [titleCol, slugCol, publishedCol],
+    subtitle: 'Storyboard journeys shown before a course, mission, bundle or tournament',
+    filters: [{ name: 'type', label: 'Type', options: LEARNING_PATH_TYPE }],
+    columns: [
+      titleCol,
+      { key: 'type', label: 'Type', render: (v) => (v ? <span className="chip bg-white/10 text-white/70 border border-white/15">{LP_TYPE_LABEL[v] || v}</span> : '—') },
+      slugCol,
+      { key: 'points', label: 'Points', className: 'text-neon', render: (v) => (Array.isArray(v) ? v.length : 0) },
+      publishedCol,
+    ],
     fields: [
       { name: 'title', label: 'Title', type: 'text', required: true },
+      {
+        name: 'type',
+        label: 'Type',
+        type: 'select',
+        options: LEARNING_PATH_TYPE,
+        required: true,
+        placeholder: 'Select a type…',
+        help: 'Which entity this path attaches to. It then appears ONLY in that entity’s "Select Learning Path" dropdown — a Mission path shows in the Mission form, a Course path in the Course form, etc.',
+      },
       slugField,
       descField,
+      {
+        name: 'points',
+        label: 'Points',
+        type: 'points',
+        help: 'The storyboard panels players see, in order. Each point has a title, image URL, description and instructions. Use "+ Add point" to add as many as you need.',
+      },
       publishedField,
     ],
   },
@@ -217,6 +264,7 @@ export const RESOURCE_CONFIGS = {
       },
       { name: 'badgeId', label: 'Champion Badge', type: 'reference', resource: 'badges', optionLabel: 'name', help: 'Optional — awarded (once) when a player completes every mission in this bundle.' },
       { name: 'certificateTemplateId', label: 'Completion Certificate', type: 'reference', resource: 'certificate-templates', optionLabel: 'name', help: 'Optional — the certificate issued (once) on first bundle completion.' },
+      learningPathField('MISSION_BUNDLE'),
       descField,
       publishedField,
     ],
@@ -242,7 +290,8 @@ export const RESOURCE_CONFIGS = {
       // Mission Bundles page (a bundle selects its missions), NOT here.
       { name: 'title', label: 'Title', type: 'text', required: true, help: 'Shown on the pillar/mission card players tap to race.' },
       slugField,
-      { name: 'courseId', label: 'Learn-First Material', type: 'reference', resource: 'courses', optionLabel: 'title', help: 'Optional. The storyboard/content shown BEFORE the race starts. This is NOT how a mission joins a course roadmap — do that from the Course form (Select Missions).' },
+      { name: 'courseId', label: 'Select course', type: 'reference', resource: 'courses', optionLabel: 'title', help: 'Optional. The course whose content is shown BEFORE the race starts. This is NOT how a mission joins a course roadmap — do that from the Course form (Select Missions).' },
+      learningPathField('MISSION'),
       { name: 'difficulty', label: 'Difficulty', type: 'select', options: DIFFICULTY, default: 'MEDIUM', help: 'Display label only — does not filter which questions are used.' },
       { name: 'timerSec', label: 'Timer (sec)', type: 'number', min: 0, default: 60, help: 'Seconds on the race clock. Correct answers add the bonus below.' },
       { name: 'correctBonusSec', label: 'Correct Bonus (sec)', type: 'number', min: 0, default: 3, help: 'Extra seconds added to the clock for each correct answer.' },
@@ -551,6 +600,7 @@ export const RESOURCE_CONFIGS = {
       { name: 'type', label: 'Type', type: 'select', options: TOURNAMENT_TYPE, default: 'WEEKLY_CHALLENGE' },
       { name: 'status', label: 'Status', type: 'select', options: TOURNAMENT_STATUS, default: 'DRAFT', help: 'Players can only race while ACTIVE; rewards pay out automatically after the end time' },
       { name: 'metric', label: 'Metric', type: 'select', options: METRIC, help: 'What players are ranked by' },
+      learningPathField('TOURNAMENT'),
       // Schedule — the tournament runs (and its races count) only in this window.
       { name: 'startsAt', label: 'Starts At', type: 'datetime' },
       { name: 'endsAt', label: 'Ends At', type: 'datetime', help: 'Final ranking + prizes are distributed automatically after this time' },
