@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { NAV_GROUPS } from './nav.js';
 import { useAuthStore } from '../store/authStore.js';
 import Icon from './Icon.jsx';
+import gamruLogo from '../assets/gamru.svg';
 
 export default function Sidebar() {
   const isSuper = useAuthStore((s) => s.isSuperAdmin());
@@ -19,13 +20,12 @@ export default function Sidebar() {
 
   return (
     <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 glass-strong border-r border-white/10 z-30">
-      <div className="px-5 h-16 flex items-center gap-2.5 border-b border-white/10">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neon to-royal grid place-items-center text-night shadow-neon">
-          <Icon name="spark" className="w-5 h-5" strokeWidth={2.2} />
-        </div>
-        <div className="leading-tight">
-          <div className="font-extrabold tracking-tight text-white">Gamru </div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-neon/80">Admin Console</div>
+      <div className="px-5 h-16 flex items-center gap-3 border-b border-white/10">
+        <img src={gamruLogo} alt="Gamru" className="h-8 w-auto shrink-0" />
+        <div className="text-[10px] uppercase tracking-[0.2em] text-neon/80 border-l border-white/15 pl-3 leading-tight">
+          Admin
+          <br />
+          Console
         </div>
       </div>
 

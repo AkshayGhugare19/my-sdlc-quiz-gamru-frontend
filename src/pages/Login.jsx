@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore.js';
 import Icon from '../components/Icon.jsx';
 import { Spinner } from '../components/ui.jsx';
 import PasswordInput from '../components/PasswordInput.jsx';
+import gamruLogo from '../assets/gamru.svg';
 
 export default function Login() {
   const login = useAuthStore((s) => s.login);
@@ -30,12 +31,11 @@ export default function Login() {
         <div className="absolute -top-32 -left-24 w-[520px] h-[520px] rounded-full bg-neon/10 blur-3xl animate-floaty" />
         <div className="absolute bottom-0 right-0 w-[420px] h-[420px] rounded-full bg-royal/20 blur-3xl" />
         <div className="relative flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-neon to-royal grid place-items-center text-night shadow-neon">
-            <Icon name="spark" className="w-6 h-6" strokeWidth={2.2} />
-          </div>
-          <div>
-            <div className="font-extrabold text-xl tracking-tight text-white">Gamru </div>
-            <div className="text-[11px] uppercase tracking-[0.25em] text-neon/80">Admin Console</div>
+          <img src={gamruLogo} alt="Gamru" className="h-12 w-auto" />
+          <div className="border-l border-white/15 pl-3 text-[11px] uppercase tracking-[0.25em] text-neon/80 leading-tight">
+            Admin
+            <br />
+            Console
           </div>
         </div>
 
@@ -67,9 +67,8 @@ export default function Login() {
           onSubmit={handleSubmit(onSubmit)}
           className="glass-strong rounded-3xl p-8 w-full max-w-md shadow-neon"
         >
-          <div className="lg:hidden flex items-center gap-2 mb-6">
-            <Icon name="spark" className="w-6 h-6 text-neon" />
-            <span className="font-extrabold text-lg text-white">Gamru </span>
+          <div className="lg:hidden flex items-center mb-6">
+            <img src={gamruLogo} alt="Gamru" className="h-9 w-auto" />
           </div>
           <div className="text-neon text-xs font-bold tracking-[0.2em]">WELCOME BACK</div>
           <h1 className="text-2xl font-extrabold mt-1 mb-6 text-white">Sign in to the console</h1>
