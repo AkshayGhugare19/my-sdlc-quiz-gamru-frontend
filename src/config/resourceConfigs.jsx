@@ -138,7 +138,7 @@ export const RESOURCE_CONFIGS = {
   courses: {
     resourceKey: 'courses',
     title: 'Courses',
-    icon: 'book',
+    icon: 'hat',
     singular: 'Course',
     subtitle: 'Learning roadmaps — each course selects existing missions, bundles and tournaments',
     filters: [
@@ -202,6 +202,7 @@ export const RESOURCE_CONFIGS = {
     icon: 'route',
     singular: 'Learning Path',
     subtitle: 'Storyboard journeys shown before a course, mission, bundle or tournament',
+    defaultsFeature: 'learning-paths',
     filters: [{ name: 'type', label: 'Type', options: LEARNING_PATH_TYPE }],
     columns: [
       titleCol,
@@ -439,7 +440,7 @@ export const RESOURCE_CONFIGS = {
   accessories: {
     resourceKey: 'accessories',
     title: 'Accessories',
-    icon: 'hat',
+    icon: 'spark',
     singular: 'Accessory',
     subtitle: 'Cosmetic items players equip on their avatar',
     defaultsFeature: 'accessories',

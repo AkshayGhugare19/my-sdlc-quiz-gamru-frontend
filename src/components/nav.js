@@ -9,7 +9,7 @@ export const NAV_GROUPS = [
   {
     title: 'Content',
     items: [
-      { to: '/courses', label: 'Courses', icon: 'book', resource: 'courses' },
+      { to: '/courses', label: 'Courses', icon: 'hat', resource: 'courses' },
       { to: '/learning-paths', label: 'Learning Paths', icon: 'route', resource: 'learning-paths' },
       { to: '/media', label: 'Media', icon: 'image', resource: 'media' },
     ],
@@ -27,7 +27,7 @@ export const NAV_GROUPS = [
     items: [
       { to: '/badges', label: 'Badges', icon: 'badge', resource: 'badges' },
       { to: '/ranks', label: 'Ranks', icon: 'crown', resource: 'ranks' },
-      { to: '/accessories', label: 'Accessories', icon: 'hat', resource: 'accessories' },
+      { to: '/accessories', label: 'Accessories', icon: 'spark', resource: 'accessories' },
       { to: '/avatars', label: 'Avatars', icon: 'ghost', resource: 'avatars' },
       { to: '/reward-rules', label: 'Reward Rules', icon: 'gift', resource: 'reward-rules' },
       { to: '/shop-items', label: 'Shop', icon: 'cart', resource: 'shop-items' },

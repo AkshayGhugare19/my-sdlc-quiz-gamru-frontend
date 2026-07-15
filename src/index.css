@@ -42,6 +42,25 @@ body {
   background-clip: padding-box;
 }
 
+/* Native <select> option popups.
+   Chrome/Edge on Windows drop the dark `color-scheme` as soon as the control
+   has a custom background (our `.field` uses a translucent bg), so the option
+   list falls back to a light OS default and becomes unreadable on our dark UI.
+   Style the options explicitly so every dropdown popup stays dark app-wide. */
+select option,
+select optgroup {
+  background-color: #0f1b33;
+  color: #e6eefc;
+}
+select option:checked,
+select option:hover {
+  background-color: #1b2b4d;
+  color: #ffffff;
+}
+select option[value=''] {
+  color: rgba(230, 238, 252, 0.6);
+}
+
 @layer components {
   .glass {
     background: rgba(255, 255, 255, 0.05);
