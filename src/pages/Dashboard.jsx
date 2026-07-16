@@ -148,10 +148,10 @@ export default function Dashboard() {
             </div>
             <span className="text-xs text-white/40">{pillars.length} bundles</span>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-[420px] overflow-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-white/40 text-xs uppercase tracking-wider border-b border-white/10">
+                <tr className="text-left text-white/40 text-xs uppercase tracking-wider border-b border-white/10 sticky top-0 bg-[#0f1b33] z-10">
                   <th className="px-5 py-2.5 font-semibold">Pillar</th>
                   <th className="px-4 py-2.5 font-semibold">Missions</th>
                   <th className="px-4 py-2.5 font-semibold">Attempts</th>
@@ -192,7 +192,7 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.34 }}
-          className="glass rounded-2xl overflow-hidden"
+          className="glass rounded-2xl overflow-hidden "
         >
           <div className="flex items-center gap-2 px-5 py-4 border-b border-white/10">
             <Icon name="help" className="w-5 h-5 text-amber-300" />
@@ -209,14 +209,17 @@ export default function Dashboard() {
                   <div key={q.id || q.questionId || i} className="rounded-xl bg-black/20 border border-white/5 p-3">
                     <div className="flex items-start gap-2">
                       <span className="chip bg-amber-400/15 text-amber-300 border border-amber-400/25 shrink-0">#{i + 1}</span>
-                      <p className="text-sm text-white/80 line-clamp-2">{q.prompt || q.title || `Question ${q.id}`}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm text-white/80 line-clamp-2">{q.prompt || q.title || `Question ${q.id}`}</p>
+                        {q.category && <span className="text-xs text-white/40">{q.category}</span>}
+                      </div>
                     </div>
-                    {rate != null && (
+                    {/* {rate != null && (
                       <div className="mt-2 flex items-center gap-2">
                         <Bar pct={rate} />
                         <span className="text-xs text-white/50">{Math.round(rate)}% correct</span>
                       </div>
-                    )}
+                    )} */}
                   </div>
                 );
               })
